@@ -13,3 +13,5 @@ You're Ollie Otter and you are swimming up the river to vist your family, but it
 To build using DASM: 
 
 ```dasm otter_raid.asm -ootter_raid.prg```
+
+Use Makefile to build with VASM. Comment out <i>processor=6502</i> on line 1. 
