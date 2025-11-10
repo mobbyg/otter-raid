@@ -51,7 +51,7 @@ start:
         sta VIC_BACKGROUND
 
         ; Disable smooth scrolling for now - simpler approach
-        lda #0
+        lda #1
         sta scroll_offset
 
         ; Clear screen with river pattern
@@ -152,9 +152,11 @@ clear_ui:
         ; Display title and UI
         ldx #0
 title:
-	lda txt_title,x
+	    lda txt_title,x
         beq show_ui
-        sta SCREEN,x
+        sta SCREEN+15,x
+		lda #5
+		sta COLOR_RAM+15,x
         inx
         jmp title
 
@@ -164,9 +166,9 @@ show_ui:
 show_score_txt:
         lda txt_score,x
         beq show_lives_txt
-        sta SCREEN+40,x
+        sta SCREEN,x
         lda #1          ; White color
-        sta COLOR_RAM+40,x
+        sta COLOR_RAM,x
         inx
         cpx #6
         bne show_score_txt
@@ -176,9 +178,9 @@ show_lives_txt:
 show_lives_loop:
         lda txt_lives,x
         beq init_displays
-        sta SCREEN+55,x
+        sta SCREEN+32,x
         lda #1          ; White color
-        sta COLOR_RAM+55,x
+        sta COLOR_RAM+32,x
         inx
         cpx #6
         bne show_lives_loop
@@ -433,7 +435,8 @@ check_enemies:
         lda #2
         sta VIC_BORDER
         ldx #0
-flash:  inx
+flash:  
+        inx
         bne flash
         lda #6
         sta VIC_BORDER
@@ -451,8 +454,10 @@ game_over:
         ldx #0
 gover:  lda txt_gameover,x
         beq forever
-        sta SCREEN+120,x
-        inx
+        sta SCREEN+495,x
+        lda #1
+		sta COLOR_RAM+495,x
+		inx
         jmp gover
 
 forever:
@@ -468,16 +473,16 @@ update_score:
         lsr
         lsr
         ora #$30
-        sta SCREEN+46
+        sta SCREEN+6
         lda #7          ; Yellow
-        sta COLOR_RAM+46
+        sta COLOR_RAM+6
 
         lda score+1
         and #$0F
         ora #$30
-        sta SCREEN+47
+        sta SCREEN+7
         lda #7
-        sta COLOR_RAM+47
+        sta COLOR_RAM+7
 
         lda score       ; Low byte
         lsr
@@ -485,16 +490,16 @@ update_score:
         lsr
         lsr
         ora #$30
-        sta SCREEN+48
+        sta SCREEN+8
         lda #7
-        sta COLOR_RAM+48
+        sta COLOR_RAM+8
 
         lda score
         and #$0F
         ora #$30
-        sta SCREEN+49
+        sta SCREEN+9
         lda #7
-        sta COLOR_RAM+49
+        sta COLOR_RAM+9
 
         rts
 
@@ -503,9 +508,9 @@ update_lives:
         ; Display lives at screen position 61 (after "LIVES:")
         lda lives
         ora #$30
-        sta SCREEN+61
+        sta SCREEN+39
         lda #7          ; Yellow
-        sta COLOR_RAM+61
+        sta COLOR_RAM+39
         rts
 
 ; Draw initial river
