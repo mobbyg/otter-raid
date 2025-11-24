@@ -365,7 +365,7 @@ check_collisions:
 bank_flash:
         inx
         bne bank_flash
-        lda #6
+        lda #0
         sta VIC_BORDER
 
 check_sprite_collision:
@@ -438,7 +438,7 @@ check_enemies:
 flash:  
         inx
         bne flash
-        lda #6
+        lda #0
         sta VIC_BORDER
 
 no_collision:
@@ -786,10 +786,10 @@ scroll_loop:
         lda COLOR_RAM+120,x
         sta COLOR_RAM+160,x
 
-        lda SCREEN+120,x
-        sta SCREEN+160,x
-        lda COLOR_RAM+120,x
-        sta COLOR_RAM+160,x
+;        lda SCREEN+120,x
+;        sta SCREEN+160,x
+;        lda COLOR_RAM+120,x
+;        sta COLOR_RAM+160,x
 
         inx
         cpx #40
@@ -892,14 +892,14 @@ draw_water_scroll:
 
 draw_bank:
         ; Draw bank
-        lda #$A0
+        lda #$AA
         ldx #120        ; Row 3
         stx $08
         tya
         clc
         adc $08
         tax
-        lda #$A0
+        lda #$AA ; #$A0 is original
         sta SCREEN,x
         lda #13
         sta COLOR_RAM,x
@@ -1049,4 +1049,4 @@ spr_gator:
 	dc.b $aa,$80,$00,$aa,$01,$04,$a8,$01
 	dc.b $04,$aa,$aa,$aa,$aa,$aa,$aa,$85
 
-        rts
+    rts
