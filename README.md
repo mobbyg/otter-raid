@@ -11,6 +11,14 @@ You're Ollie Otter and you are swimming up the river to vist your family, but it
 </p>
 
 <hr>
+
+Currently Supported Platforms
+* Commodore 64/128 (in 64 mode)
+
+Coming Soon
+* Commander X16
+<hr>
+
 To build using DASM: 
 
 ```dasm otter_raid.asm -ootter_raid.prg```
