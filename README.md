@@ -7,7 +7,8 @@ A first attempt to write a game in 6502 Assembly for the Commodore 64.
 You're Ollie Otter and you are swimming up the river to vist your family, but it's a long swim and on the way, you will need to keep your energy up by eating some yummy fish. But you also must avaoid the alligators that are trying to eat you, as well as the Edgar the eagle, who could swoop down and catch you to make a meal out of you. But keep an eye out for crawfish, as they can give you a boost of speed and make you invilnerable to a short time!
 
 <p align="center">
-<img width="1203" height="911" alt="image" src="https://github.com/user-attachments/assets/c04a321f-b034-486c-ac89-956828f47d93" />
+<img width="1202" height="809" alt="image" src="https://github.com/user-attachments/assets/8ee032de-35be-4e06-8129-7a79e5e03e76" />
+
 </p>
 
 <hr>
