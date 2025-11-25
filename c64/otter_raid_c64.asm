@@ -1,7 +1,7 @@
 	processor 6502
 
 ; ===============================================
-; OTTER RAID - Full Game
+; OTTER RAID - Full Game with Procedural River
 ; ===============================================
 
 SCREEN = $0400
@@ -16,15 +16,15 @@ VIC_SPRITE_COLLISION = $D01E
 VIC_SPRITE_BG_COLLISION = $D01F
 CIA1_PORT_B = $DC01
 VIC_RASTER = $D012
-VIC_CTRL1 = $D011   ; Vertical scroll control
-VIC_CTRL2 = $D016   ; Horizontal scroll control
 
 ; Game variables
 score = $FB         ; Score (2 bytes)
 lives = $FD         ; Lives remaining
 hit_cooldown = $FE  ; Collision cooldown timer
-scroll_offset = $FA ; Fine scroll offset (0-7)
-river_pattern = $F9 ; Current river pattern index
+scroll_offset = $FA ; Scroll speed counter
+left_bank = $F9     ; Left river bank position (0-39)
+right_bank = $F8    ; Right river bank position (0-39)
+random_seed = $F7   ; Random number seed
 
         org $0801
 
@@ -40,9 +40,18 @@ start:
         sta score+1
         sta hit_cooldown
         sta scroll_offset
-        sta river_pattern
         lda #3
         sta lives
+
+        ; Initialize river banks
+        lda #4
+        sta left_bank
+        lda #35
+        sta right_bank
+
+        ; Initialize random seed
+        lda #$A5
+        sta random_seed
 
         ; Setup colors
         lda #0
@@ -50,17 +59,75 @@ start:
         lda #6
         sta VIC_BACKGROUND
 
-        ; Disable smooth scrolling for now - simpler approach
-        lda #1
-        sta scroll_offset
+        ; Clear screen
+        lda #$20
+        ldx #0
+clr:    
+        sta SCREEN,x
+        sta SCREEN+$100,x
+        sta SCREEN+$200,x
+        sta SCREEN+$2e8,x
+        inx
+        bne clr
 
-        ; Clear screen with river pattern
-        jsr draw_river
+        ; Draw initial river FIRST (rows 3-24)
+        ldx #3
+init_river:
+        stx $02
+        jsr draw_river_row
+        jsr adjust_banks
+        ldx $02
+        inx
+        cpx #25
+        bne init_river
+
+        ; NOW draw UI on top (will never be touched by scrolling)
+        ; Display title (row 0, centered at column 15)
+        ldx #0
+title:  
+        lda txt_title,x
+        beq show_score
+        sta SCREEN+15,x
+        lda #5
+        sta COLOR_RAM+15,x
+        inx
+        jmp title
+
+show_score:
+        ; Display "SCORE:" at row 1, column 0
+        ldx #0
+score_loop:
+        lda txt_score,x
+        beq show_lives
+        sta SCREEN,x
+        lda #1
+        sta COLOR_RAM,x
+        inx
+        cpx #6
+        bne score_loop
+
+show_lives:
+        ; Display "LIVES:" at row 1, column 32
+        ldx #0
+lives_loop:
+        lda txt_lives,x
+        beq setup_sprites
+        sta SCREEN+32,x
+        lda #1
+        sta COLOR_RAM+32,x
+        inx
+        cpx #6
+        bne lives_loop
+
+setup_sprites:
+        ; Update score and lives displays
+        jsr update_score
+        jsr update_lives
 
         ; Copy sprite data
         ldx #0
-cpy:
-	lda spr_otter,x
+cpy:    
+        lda spr_otter,x
         sta $0340,x
         lda spr_fish,x
         sta $0380,x
@@ -97,188 +164,129 @@ cpy:
         sta VIC_SPRITE_COLOR+4      ; Green gators
         sta VIC_SPRITE_COLOR+5
         lda #1
-        sta VIC_SPRITE_COLOR+6      ; white eagle
+        sta VIC_SPRITE_COLOR+6      ; White eagle
 
-        ; Init positions (keep sprites in water area, away from banks)
-        ; Banks are at X: 0-7 (left) and 280-319 (right on 40-col = cols 35-39)
-        ; Safe water area: X between 60-220 approximately
-
+        ; Init sprite positions
         lda #160        ; Otter in center
         sta VIC_SPRITE_X+0
         lda #200
         sta VIC_SPRITE_Y+0
 
-        lda #80         ; Fish 1 - left side of water
+        lda #80         ; Fish 1
         sta VIC_SPRITE_X+2
         lda #50
         sta VIC_SPRITE_Y+2
 
-        lda #150        ; Fish 2 - center
+        lda #150        ; Fish 2
         sta VIC_SPRITE_X+4
         lda #100
         sta VIC_SPRITE_Y+4
 
-        lda #200        ; Fish 3 - right side of water
+        lda #200        ; Fish 3
         sta VIC_SPRITE_X+6
         lda #150
         sta VIC_SPRITE_Y+6
 
-        lda #100        ; Gator 1 - left-center
+        lda #100        ; Gator 1
         sta VIC_SPRITE_X+8
         lda #60
         sta VIC_SPRITE_Y+8
 
-        lda #180        ; Gator 2 - right-center
+        lda #180        ; Gator 2
         sta VIC_SPRITE_X+10
         lda #130
         sta VIC_SPRITE_Y+10
 
-        lda #140        ; Eagle - center
+        lda #140        ; Eagle
         sta VIC_SPRITE_X+12
         lda #30
         sta VIC_SPRITE_Y+12
 
-        ; Clear top 3 rows for UI (just to be safe)
-        lda #$20
-        ldx #0
-clear_ui:
-        sta SCREEN,x        ; Row 0
-        sta SCREEN+40,x     ; Row 1
-        sta SCREEN+80,x     ; Row 2
-        inx
-        cpx #40
-        bne clear_ui
-
-        ; Display title and UI
-        ldx #0
-title:
-	    lda txt_title,x
-        beq show_ui
-        sta SCREEN+15,x
-		lda #5
-		sta COLOR_RAM+15,x
-        inx
-        jmp title
-
-show_ui:
-        ; Display "SCORE:" at position 40 (second line)
-        ldx #0
-show_score_txt:
-        lda txt_score,x
-        beq show_lives_txt
-        sta SCREEN,x
-        lda #1          ; White color
-        sta COLOR_RAM,x
-        inx
-        cpx #6
-        bne show_score_txt
-
-show_lives_txt:
-        ldx #0
-show_lives_loop:
-        lda txt_lives,x
-        beq init_displays
-        sta SCREEN+32,x
-        lda #1          ; White color
-        sta COLOR_RAM+32,x
-        inx
-        cpx #6
-        bne show_lives_loop
-
-init_displays:
-        ; Initialize score display
-        jsr update_score
-        jsr update_lives
-
 ; Main game loop
 game_loop:
-        ; Wait for raster line 250 (bottom of screen)
-wait1:
-	lda VIC_RASTER
+        ; Wait for raster
+wait1:  lda VIC_RASTER
         cmp #250
         bne wait1
-
-        ; Wait for it to pass
-wait2:
-	lda VIC_RASTER
+wait2:  lda VIC_RASTER
         cmp #250
         beq wait2
 
-        ; Check joystick (port 2, bits inverted: 0=pressed)
+        ; Check joystick
         lda CIA1_PORT_B
-        and #$01        ; Up
+        and #$01
         bne skip_up
         lda VIC_SPRITE_Y+0
-        cmp #50         ; Top boundary (leave room for score display)
+        cmp #50
         bcc skip_up
         dec VIC_SPRITE_Y+0
 skip_up:
         lda CIA1_PORT_B
-        and #$02        ; Down
+        and #$02
         bne skip_down
         lda VIC_SPRITE_Y+0
-        cmp #229        ; Bottom boundary
+        cmp #229
         bcs skip_down
         inc VIC_SPRITE_Y+0
 skip_down:
         lda CIA1_PORT_B
-        and #$04        ; Left
+        and #$04
         bne skip_left
         lda VIC_SPRITE_X+0
-        cmp #24         ; Left boundary
+        cmp #24
         bcc skip_left
         dec VIC_SPRITE_X+0
 skip_left:
         lda CIA1_PORT_B
-        and #$08        ; Right
+        and #$08
         bne skip_right
         lda VIC_SPRITE_X+0
-        cmp #255        ; Right boundary (allow near edge)
+        cmp #255
         bcs skip_right
         inc VIC_SPRITE_X+0
-skip_right:
 
-        ; Scroll river every few frames
+skip_right:
+        ; Scroll river
         inc scroll_offset
         lda scroll_offset
-        cmp #8          ; Scroll every 5 frames / scroll speed
+        cmp #8
         bcs do_scroll_now
         jmp no_scroll_yet
+
 do_scroll_now:
         lda #0
         sta scroll_offset
         jsr scroll_river
-
-        ; Move sprites 8 pixels to match river scroll speed
+        ; Move sprites
         lda VIC_SPRITE_Y+2
         clc
         adc #8
-        sta VIC_SPRITE_Y+2      ; Fish 1
+        sta VIC_SPRITE_Y+2
 
         lda VIC_SPRITE_Y+4
         clc
         adc #8
-        sta VIC_SPRITE_Y+4      ; Fish 2
+        sta VIC_SPRITE_Y+4
 
         lda VIC_SPRITE_Y+6
         clc
         adc #8
-        sta VIC_SPRITE_Y+6      ; Fish 3
+        sta VIC_SPRITE_Y+6
 
         lda VIC_SPRITE_Y+8
         clc
         adc #8
-        sta VIC_SPRITE_Y+8      ; Gator 1
+        sta VIC_SPRITE_Y+8
 
         lda VIC_SPRITE_Y+10
         clc
         adc #8
-        sta VIC_SPRITE_Y+10     ; Gator 2
+        sta VIC_SPRITE_Y+10
 
         lda VIC_SPRITE_X+12
         clc
         adc #8
-        sta VIC_SPRITE_X+12     ; Eagle (moves right)
+        sta VIC_SPRITE_X+12
 
         ; Wrap fish
         lda VIC_SPRITE_Y+2
@@ -333,7 +341,6 @@ g2_ok:
 eagle_ok:
 
 no_scroll_yet:
-
         ; Decrease hit cooldown
         lda hit_cooldown
         beq check_collisions
@@ -341,24 +348,22 @@ no_scroll_yet:
         jmp no_collision
 
 check_collisions:
-        ; Check sprite-to-background collision (hitting river banks)
+        ; Check sprite-to-background collision
         lda VIC_SPRITE_BG_COLLISION
-        and #$01        ; Sprite 0 (otter)
+        and #$01
         beq check_sprite_collision
 
-        ; Hit the riverbank! Lose a life
+        ; Hit riverbank!
         dec lives
         lda lives
         beq game_over
 
-        ; Set cooldown timer
         lda #100
         sta hit_cooldown
 
-        ; Update lives display
         jsr update_lives
 
-        ; Flash border red
+        ; Flash border
         lda #2
         sta VIC_BORDER
         ldx #0
@@ -369,32 +374,30 @@ bank_flash:
         sta VIC_BORDER
 
 check_sprite_collision:
-        ; Check sprite-to-sprite collisions (reading clears the register)
+        ; Check sprite-to-sprite collisions
         lda VIC_SPRITE_COLLISION
-        sta $02         ; Save collision flags
+        sta $02
         beq no_collision
 
-        ; Check if otter (sprite 0) hit fish (sprites 1,2,3)
-        ; Collision register bit N is set if sprite 0 collided with sprite N
+        ; Check fish collisions
         lda $02
-        and #$0E        ; Bits 1,2,3 = fish sprites
+        and #$0E
         beq check_enemies
 
-        ; Hit a fish! Add 10 points
-        sed             ; Decimal mode for BCD scoring
+        ; Hit a fish!
+        sed
         clc
         lda score
-        adc #$10        ; Add 10 in BCD
+        adc #$10
         sta score
         lda score+1
         adc #0
         sta score+1
         cld
 
-        ; Update score display
         jsr update_score
 
-        ; Move the caught fish off screen
+        ; Move caught fish off screen
         lda $02
         and #$02
         beq not_f1
@@ -414,29 +417,26 @@ not_f2:
         sta VIC_SPRITE_Y+6
 
 check_enemies:
-        ; Check if otter hit gators (sprites 4,5) or eagle (sprite 6)
+        ; Check enemy collisions
         lda $02
-        and #$70        ; Bits 4,5,6 = enemies
+        and #$70
         beq no_collision
 
-        ; Hit an enemy! Lose a life
+        ; Hit an enemy!
         dec lives
-        lda lives       ; Check if lives is zero
+        lda lives
         beq game_over
 
-        ; Set cooldown timer (prevents multiple hits)
-        lda #100        ; About 2 seconds of invincibility
+        lda #100
         sta hit_cooldown
 
-        ; Update lives display
         jsr update_lives
 
-        ; Flash border red briefly
+        ; Flash border
         lda #2
         sta VIC_BORDER
         ldx #0
-flash:  
-        inx
+flash:  inx
         bne flash
         lda #0
         sta VIC_BORDER
@@ -445,46 +445,42 @@ no_collision:
         jmp game_loop
 
 game_over:
-        ; Flash border
         lda #2
         sta VIC_BORDER
         sta VIC_BACKGROUND
 
-        ; Display GAME OVER
         ldx #0
 gover:  lda txt_gameover,x
         beq forever
         sta SCREEN+495,x
         lda #1
-		sta COLOR_RAM+495,x
-		inx
+        sta COLOR_RAM+495,x
+        inx
         jmp gover
 
 forever:
         jmp forever
 
-; Update score display
+; Update score display (row 1, after "SCORE:")
 update_score:
-        ; Display score at screen position 46-49 (after "SCORE:")
-        ; Screen codes: digits are $30-$39
-        lda score+1     ; High byte
-        lsr
-        lsr
-        lsr
-        lsr
-        ora #$30
-        sta SCREEN+6
-        lda #7          ; Yellow
-        sta COLOR_RAM+6
-
         lda score+1
-        and #$0F
+        lsr
+        lsr
+        lsr
+        lsr
         ora #$30
         sta SCREEN+7
         lda #7
         sta COLOR_RAM+7
 
-        lda score       ; Low byte
+        lda score+1
+        and #$0F
+        ora #$30
+        sta SCREEN+9
+        lda #7
+        sta COLOR_RAM+9
+
+        lda score
         lsr
         lsr
         lsr
@@ -497,195 +493,161 @@ update_score:
         lda score
         and #$0F
         ora #$30
-        sta SCREEN+9
+        sta SCREEN+10
         lda #7
-        sta COLOR_RAM+9
-
+        sta COLOR_RAM+10
         rts
 
-; Update lives display
+; Update lives display (row 1, after "LIVES:")
 update_lives:
-        ; Display lives at screen position 61 (after "LIVES:")
         lda lives
         ora #$30
-        sta SCREEN+39
-        lda #7          ; Yellow
-        sta COLOR_RAM+39
+        sta SCREEN+38
+        lda #7
+        sta COLOR_RAM+38
         rts
 
-; Draw initial river
-draw_river:
-        ; Clear entire screen first
-        lda #$20
-        ldx #0
-clr:    sta SCREEN,x
-        sta SCREEN+$100,x
-        sta SCREEN+$200,x
-        sta SCREEN+$2e8,x
-        inx
-        bne clr
-
-        ; Draw river banks using bitmap - start at row 3 (after UI rows 0-2)
+draw_river_row:
+        ; Compute 16-bit offset = row * 40
         lda #0
-        sta river_pattern
-        lda #3
-        sta $0E         ; Screen row counter (3-24)
-
-draw_init_row:
-        ; Use same bitmap drawing logic
-        ; Get current pattern row
-        lda river_pattern
-        and #$3F
-        sta $05
-        asl
-        asl
+        sta $03  ; offset low
+        sta $04  ; offset high
+        ldx $02  ; row
+        beq offset_done
+add40:
         clc
-        adc $05         ; x5
-        tax             ; X = offset into river_map
-
-        ; Calculate screen position for this row
-        lda $0E
-        asl
-        asl
-        asl
+        lda $03
+        adc #40
+        sta $03
+        lda $04
+        adc #0
         sta $04
-        lda $0E
-        asl
-        asl
-        asl
-        asl
-        asl
+        dex
+        bne add40
+offset_done:
+        ; Screen ptr = SCREEN + offset
         clc
-        adc $04         ; Screen row offset
-        sta $0F         ; Save screen offset
+        lda $03
+        adc #<SCREEN
+        sta $03
+        lda $04
+        adc #>SCREEN
+        sta $04
+        ; Color ptr = COLOR_RAM + offset = screen ptr + $D400
+        clc
+        lda $03
+        adc #<$D400  ; $00
+        sta $05  ; color low
+        lda $04
+        adc #>$D400  ; $D4
+        sta $06  ; color high
 
-        ; Draw 40 columns
         ldy #0
-init_columns:
-        ; Calculate byte and bit
-        tya
-        lsr
-        lsr
-        lsr
-        sta $06         ; Byte index
-        tya
-        and #$07
-        sta $07         ; Bit index
-
-        ; Get byte from map
-        txa
-        clc
-        adc $06
-        tax
-        lda river_map,x
-
-        ; Test the bit using a mask
-        ldx $07
-        cpx #0
-        beq init_test_bit7
-        cpx #1
-        beq init_test_bit6
-        cpx #2
-        beq init_test_bit5
-        cpx #3
-        beq init_test_bit4
-        cpx #4
-        beq init_test_bit3
-        cpx #5
-        beq init_test_bit2
-        cpx #6
-        beq init_test_bit1
-        and #$01
-        jmp init_test_done
-init_test_bit1:
-        and #$02
-        jmp init_test_done
-init_test_bit2:
-        and #$04
-        jmp init_test_done
-init_test_bit3:
-        and #$08
-        jmp init_test_done
-init_test_bit4:
-        and #$10
-        jmp init_test_done
-init_test_bit5:
-        and #$20
-        jmp init_test_done
-init_test_bit6:
-        and #$40
-        jmp init_test_done
-init_test_bit7:
-        and #$80
-init_test_done:
-        beq init_water
-        jmp init_bank
-
-init_water:
-
-        ; Draw water
-        ldx $0F
-        stx $08
-        tya
-        clc
-        adc $08
-        tax
+draw_col:
+        cpy left_bank
+        bcc is_bank
+        cpy right_bank
+        bcs is_bank
+        ; Water
         lda #$20
-        sta SCREEN,x
-        jmp init_next
-
-init_bank:
-        ; Draw bank
-        ldx $0F
-        stx $08
-        tya
-        clc
-        adc $08
-        tax
+        sta ($03),y
+        jmp next_col
+is_bank:
         lda #$A0
-        sta SCREEN,x
+        sta ($03),y
         lda #5
-        sta COLOR_RAM,x
-
-init_next:
-        ; Restore map offset
-        lda river_pattern
-        and #$3F
-        sta $05
-        asl
-        asl
-        clc
-        adc $05
-        tax
-
+        sta ($05),y
+next_col:
         iny
         cpy #40
-        beq init_row_done
-        jmp init_columns
-
-init_row_done:
-        ; Next row
-        inc river_pattern
-        inc $0E
-        lda $0E
-        cmp #25
-        beq init_all_done
-        jmp draw_init_row
-
-init_all_done:
+        bne draw_col
         rts
 
-; Scroll river downward (River Raid style)
+; Adjust river banks
+adjust_banks:
+        jsr get_random
+        and #$03
+        cmp #0
+        beq left_widen
+        cmp #1
+        beq left_narrow
+        jmp check_right
+
+left_widen:
+        lda left_bank
+        cmp #1
+        beq check_right
+        dec left_bank
+        jmp check_right
+
+left_narrow:
+        lda left_bank
+        cmp #8
+        bcs check_right
+        inc left_bank
+
+check_right:
+        jsr get_random
+        and #$03
+        cmp #0
+        beq right_widen
+        cmp #1
+        beq right_narrow
+        jmp ensure_width
+
+right_widen:
+        lda right_bank
+        cmp #39
+        beq ensure_width
+        inc right_bank
+        jmp ensure_width
+
+right_narrow:
+        lda right_bank
+        cmp #32
+        bcc ensure_width
+        dec right_bank
+
+ensure_width:
+        lda right_bank
+        sec
+        sbc left_bank
+        cmp #16
+        bcs width_ok
+
+        lda left_bank
+        cmp #4
+        bcc widen_right
+        dec left_bank
+        jmp width_ok
+widen_right:
+        inc right_bank
+
+width_ok:
+        rts
+
+; Random number generator
+get_random:
+        lda random_seed
+        asl
+        asl
+        clc
+        adc random_seed
+        adc #$11
+        sta random_seed
+        rts
+
+; Scroll river (rows 3-24 only, protect UI in rows 0-2)
 scroll_river:
-        ; Shift all river data down one row (40 chars)
-        ; Start from bottom and work up to avoid overwriting
         ldx #0
 scroll_loop:
+        ; Scroll from row 23 to 24 (bottom)
         lda SCREEN+920,x
         sta SCREEN+960,x
         lda COLOR_RAM+920,x
         sta COLOR_RAM+960,x
 
+        ; Continue scrolling upward to row 4
         lda SCREEN+880,x
         sta SCREEN+920,x
         lda COLOR_RAM+880,x
@@ -781,15 +743,11 @@ scroll_loop:
         lda COLOR_RAM+160,x
         sta COLOR_RAM+200,x
 
+        ; Scroll row 3 to row 4 (120 -> 160)
         lda SCREEN+120,x
         sta SCREEN+160,x
         lda COLOR_RAM+120,x
         sta COLOR_RAM+160,x
-
-;        lda SCREEN+120,x
-;        sta SCREEN+160,x
-;        lda COLOR_RAM+120,x
-;        sta COLOR_RAM+160,x
 
         inx
         cpx #40
@@ -797,256 +755,55 @@ scroll_loop:
         jmp scroll_loop
 
 done_scroll:
-        ; Add new row at TOP (after score) - using bit map
-        ; Top playfield row is at screen position 120 (row 3)
-
-        ; Get current pattern row from map
-        inc river_pattern
-        lda river_pattern
-        and #$3F        ; 64 map rows (0-63)
-
-        ; Multiply by 5 to get byte offset (each row = 5 bytes)
-        sta $05
-        asl             ; x2
-        asl             ; x4
-        clc
-        adc $05         ; x5
-        tax             ; X = offset into river_map
-
-        ; Draw 40 columns from bit map
-        ldy #0          ; Column counter
-draw_columns:
-        ; Calculate which byte and bit
-        tya
-        lsr
-        lsr
-        lsr             ; Y / 8 = byte index (0-4)
-        sta $06
-
-        tya
-        and #$07        ; Y % 8 = bit index (0-7)
-        sta $07
-
-        ; Get the byte from map
-        txa
-        clc
-        adc $06         ; Add byte offset
-        tax
-        lda river_map,x
-
-        ; Test the bit using a mask
-        ; Bit 0 (column 0) = bit 7, bit 1 = bit 6, etc.
-        ldx $07         ; Bit position (0-7)
-        cpx #0
-        beq test_bit7
-        cpx #1
-        beq test_bit6
-        cpx #2
-        beq test_bit5
-        cpx #3
-        beq test_bit4
-        cpx #4
-        beq test_bit3
-        cpx #5
-        beq test_bit2
-        cpx #6
-        beq test_bit1
-        and #$01
-        jmp test_done
-test_bit1:
-        and #$02
-        jmp test_done
-test_bit2:
-        and #$04
-        jmp test_done
-test_bit3:
-        and #$08
-        jmp test_done
-test_bit4:
-        and #$10
-        jmp test_done
-test_bit5:
-        and #$20
-        jmp test_done
-test_bit6:
-        and #$40
-        jmp test_done
-test_bit7:
-        and #$80
-test_done:
-        beq draw_water_scroll
-        jmp draw_bank
-
-draw_water_scroll:
-        ; Draw water (space)
-        lda #$20
-        ldx #120        ; Row 3
-        stx $08
-        tya
-        clc
-        adc $08
-        tax
-        lda #$20
-        sta SCREEN,x
-        jmp next_column
-
-draw_bank:
-        ; Draw bank
-        lda #$AA
-        ldx #120        ; Row 3
-        stx $08
-        tya
-        clc
-        adc $08
-        tax
-        lda #$AA ; #$A0 is original
-        sta SCREEN,x
-        lda #13
-        sta COLOR_RAM,x
-
-next_column:
-        ; Restore X to map offset
-        lda river_pattern
-        and #$3F
-        sta $05
-        asl
-        asl
-        clc
-        adc $05
-        tax
-
-        iny
-        cpy #40
-        beq done_drawing
-        jmp draw_columns
-
-done_drawing:
+        ; Draw new row at row 3
+        lda #3
+        sta $02
+        jsr draw_river_row
+        jsr adjust_banks
         rts
 
-; River map - each byte is a row showing which columns have banks (1) or water (0)
-; 40 columns = 5 bytes per row (40 bits)
-; This gives us 64 rows of river patterns to cycle through
-river_map:
-        ; Row 0-7: Straight wide river (banks at edges)
-        dc.b %11110000,%00000000,%00000000,%00000000,%00001111  ; 4 left, 4 right
-        dc.b %11110000,%00000000,%00000000,%00000000,%00001111
-        dc.b %11110000,%00000000,%00000000,%00000000,%00001111
-        dc.b %11110000,%00000000,%00000000,%00000000,%00001111
-        dc.b %11110000,%00000000,%00000000,%00000000,%00001111
-        dc.b %11110000,%00000000,%00000000,%00000000,%00001111
-        dc.b %11110000,%00000000,%00000000,%00000000,%00001111
-        dc.b %11110000,%00000000,%00000000,%00000000,%00001111
-
-        ; Row 8-15: Narrowing river
-        dc.b %11111000,%00000000,%00000000,%00000000,%00011111  ; 5 left, 5 right
-        dc.b %11111000,%00000000,%00000000,%00000000,%00011111
-        dc.b %11111100,%00000000,%00000000,%00000000,%00111111  ; 6 left, 6 right
-        dc.b %11111100,%00000000,%00000000,%00000000,%00111111
-        dc.b %11111110,%00000000,%00000000,%00000000,%01111111  ; 7 left, 7 right
-        dc.b %11111110,%00000000,%00000000,%00000000,%01111111
-        dc.b %11111111,%00000000,%00000000,%00000000,%11111111  ; 8 left, 8 right
-        dc.b %11111111,%00000000,%00000000,%00000000,%11111111
-
-        ; Row 16-23: Widening river
-        dc.b %11111110,%00000000,%00000000,%00000000,%01111111  ; 7 left, 7 right
-        dc.b %11111110,%00000000,%00000000,%00000000,%01111111
-        dc.b %11111100,%00000000,%00000000,%00000000,%00111111  ; 6 left, 6 right
-        dc.b %11111100,%00000000,%00000000,%00000000,%00111111
-        dc.b %11111000,%00000000,%00000000,%00000000,%00011111  ; 5 left, 5 right
-        dc.b %11111000,%00000000,%00000000,%00000000,%00011111
-        dc.b %11110000,%00000000,%00000000,%00000000,%00001111  ; 4 left, 4 right
-        dc.b %11110000,%00000000,%00000000,%00000000,%00001111
-
-        ; Row 24-31: Asymmetric bends (left curve)
-        dc.b %11100000,%00000000,%00000000,%00000000,%00001111  ; 3 left, 4 right
-        dc.b %11000000,%00000000,%00000000,%00000000,%00001111  ; 2 left, 4 right
-        dc.b %11000000,%00000000,%00000000,%00000000,%00011111  ; 2 left, 5 right
-        dc.b %11000000,%00000000,%00000000,%00000000,%00111111  ; 2 left, 6 right
-        dc.b %11000000,%00000000,%00000000,%00000000,%00111111  ; 2 left, 6 right
-        dc.b %11000000,%00000000,%00000000,%00000000,%00011111  ; 2 left, 5 right
-        dc.b %11000000,%00000000,%00000000,%00000000,%00001111  ; 2 left, 4 right
-        dc.b %11100000,%00000000,%00000000,%00000000,%00001111  ; 3 left, 4 right
-
-        ; Row 32-39: Asymmetric bends (right curve)
-        dc.b %11110000,%00000000,%00000000,%00000000,%00000111  ; 4 left, 3 right
-        dc.b %11110000,%00000000,%00000000,%00000000,%00000011  ; 4 left, 2 right
-        dc.b %11111000,%00000000,%00000000,%00000000,%00000011  ; 5 left, 2 right
-        dc.b %11111100,%00000000,%00000000,%00000000,%00000011  ; 6 left, 2 right
-        dc.b %11111100,%00000000,%00000000,%00000000,%00000011  ; 6 left, 2 right
-        dc.b %11111000,%00000000,%00000000,%00000000,%00000011  ; 5 left, 2 right
-        dc.b %11110000,%00000000,%00000000,%00000000,%00000011  ; 4 left, 2 right
-        dc.b %11110000,%00000000,%00000000,%00000000,%00000111  ; 4 left, 3 right
-
-        ; Row 40-47: More variations
-        dc.b %11111000,%00000000,%00000000,%00000000,%00001111  ; 5 left, 4 right
-        dc.b %11110000,%00000000,%00000000,%00000000,%00011111  ; 4 left, 5 right
-        dc.b %11111000,%00000000,%00000000,%00000000,%00001111  ; 5 left, 4 right
-        dc.b %11110000,%00000000,%00000000,%00000000,%00011111  ; 4 left, 5 right
-        dc.b %11111100,%00000000,%00000000,%00000000,%00011111  ; 6 left, 5 right
-        dc.b %11111000,%00000000,%00000000,%00000000,%00111111  ; 5 left, 6 right
-        dc.b %11111100,%00000000,%00000000,%00000000,%00011111  ; 6 left, 5 right
-        dc.b %11111000,%00000000,%00000000,%00000000,%00111111  ; 5 left, 6 right
-
-        ; Row 48-55: Narrow passages
-        dc.b %11111111,%00000000,%00000000,%00000000,%11111111  ; 8 left, 8 right
-        dc.b %11111111,%10000000,%00000000,%00000000,%11111111  ; 9 left, 8 right
-        dc.b %11111111,%00000000,%00000000,%00000001,%11111111  ; 8 left, 9 right
-        dc.b %11111111,%10000000,%00000000,%00000001,%11111111  ; 9 left, 9 right
-        dc.b %11111111,%00000000,%00000000,%00000001,%11111111  ; 8 left, 9 right
-        dc.b %11111111,%10000000,%00000000,%00000000,%11111111  ; 9 left, 8 right
-        dc.b %11111111,%00000000,%00000000,%00000000,%11111111  ; 8 left, 8 right
-        dc.b %11111110,%00000000,%00000000,%00000000,%01111111  ; 7 left, 7 right
-
-        ; Row 56-63: Back to normal
-        dc.b %11111000,%00000000,%00000000,%00000000,%00011111  ; 5 left, 5 right
-        dc.b %11111000,%00000000,%00000000,%00000000,%00011111
-        dc.b %11110000,%00000000,%00000000,%00000000,%00001111  ; 4 left, 4 right
-        dc.b %11110000,%00000000,%00000000,%00000000,%00001111
-        dc.b %11110000,%00000000,%00000000,%00000000,%00001111
-        dc.b %11110000,%00000000,%00000000,%00000000,%00001111
-        dc.b %11110000,%00000000,%00000000,%00000000,%00001111
-        dc.b %11110000,%00000000,%00000000,%00000000,%00001111
-
+; Text data
 txt_title:
-        dc.b $0f,$14,$14,$05,$12,$20,$12,$01,$09,$04,0  ; "OTTER RAID"
+        dc.b $0f,$14,$14,$05,$12,$20,$12,$01,$09,$04,0
 
 txt_score:
-        dc.b $13,$03,$0f,$12,$05,$3a,0  ; "SCORE:"
+        dc.b $13,$03,$0f,$12,$05,$3a,0
 
 txt_lives:
-        dc.b $0c,$09,$16,$05,$13,$3a,0  ; "LIVES:"
+        dc.b $0c,$09,$16,$05,$13,$3a,0
 
 txt_gameover:
-        dc.b $07,$01,$0d,$05,$20,$0f,$16,$05,$12,0  ; "GAME OVER"
+        dc.b $07,$01,$0d,$05,$20,$0f,$16,$05,$12,0
 
 ; Sprite data
 spr_otter:
         dc.b $00,$18,$00,$00,$3c,$00,$00,$7e
-	dc.b $00,$00,$7e,$00,$00,$7e,$00,$00
-	dc.b $3c,$00,$00,$00,$00,$00,$3c,$00
-	dc.b $00,$7e,$00,$00,$7e,$00,$00,$7e
-	dc.b $00,$00,$7e,$00,$00,$3c,$00,$00
-	dc.b $18,$00,$00,$18,$00,$00,$18,$00
-	dc.b $00,$18,$00,$00,$18,$00,$00,$18
-	dc.b $00,$00,$00,$00,$00,$00,$00,$02
+        dc.b $00,$00,$7e,$00,$00,$7e,$00,$00
+        dc.b $3c,$00,$00,$00,$00,$00,$3c,$00
+        dc.b $00,$7e,$00,$00,$7e,$00,$00,$7e
+        dc.b $00,$00,$7e,$00,$00,$3c,$00,$00
+        dc.b $18,$00,$00,$18,$00,$00,$18,$00
+        dc.b $00,$18,$00,$00,$18,$00,$00,$18
+        dc.b $00,$00,$00,$00,$00,$00,$00,$02
 
 spr_fish:
-	dc.b $00,$00,$00,$00,$00,$00,$00,$00
-	dc.b $00,$00,$80,$00,$01,$02,$00,$06
-	dc.b $04,$00,$0f,$0e,$00,$1f,$9e,$00
-	dc.b $77,$fc,$00,$f7,$f8,$00,$3f,$f8
-	dc.b $00,$1f,$bc,$00,$0f,$1e,$00,$06
-	dc.b $0e,$00,$04,$04,$00,$02,$02,$00
-	dc.b $00,$00,$00,$00,$00,$00,$00,$00
-	dc.b $00,$00,$00,$00,$00,$00,$00,$07
-spr_gator:
-	dc.b $00,$00,$00,$00,$00,$00,$00,$00
-	dc.b $00,$00,$00,$00,$00,$00,$00,$00
-	dc.b $00,$00,$00,$00,$00,$00,$00,$00
-	dc.b $00,$00,$02,$00,$00,$2a,$00,$00
-	dc.b $aa,$0a,$82,$a9,$2a,$aa,$81,$a6
-	dc.b $aa,$40,$a6,$a8,$40,$aa,$a0,$00
-	dc.b $aa,$80,$00,$aa,$01,$04,$a8,$01
-	dc.b $04,$aa,$aa,$aa,$aa,$aa,$aa,$85
+        dc.b $00,$00,$00,$00,$00,$00,$00,$00
+        dc.b $00,$00,$80,$00,$01,$02,$00,$06
+        dc.b $04,$00,$0f,$0e,$00,$1f,$9e,$00
+        dc.b $77,$fc,$00,$f7,$f8,$00,$3f,$f8
+        dc.b $00,$1f,$bc,$00,$0f,$1e,$00,$06
+        dc.b $0e,$00,$04,$04,$00,$02,$02,$00
+        dc.b $00,$00,$00,$00,$00,$00,$00,$00
+        dc.b $00,$00,$00,$00,$00,$00,$00,$07
 
-    rts
+spr_gator:
+        dc.b $00,$00,$00,$00,$00,$00,$00,$00
+        dc.b $00,$00,$00,$00,$00,$00,$00,$00
+        dc.b $00,$00,$00,$00,$00,$00,$00,$00
+        dc.b $00,$00,$02,$00,$00,$2a,$00,$00
+        dc.b $aa,$0a,$82,$a9,$2a,$aa,$81,$a6
+        dc.b $aa,$40,$a6,$a8,$40,$aa,$a0,$00
+        dc.b $aa,$80,$00,$aa,$01,$04,$a8,$01
+        dc.b $04,$aa,$aa,$aa,$aa,$aa,$aa,$85
+
+        rts
