@@ -1,7 +1,7 @@
-	processor 6502
+        processor 6502
 
 ; ===============================================
-; OTTER RAID - Full Game with Procedural River
+; OTTER RAID - COLLISION FIX: Just ignore banks!
 ; ===============================================
 
 SCREEN = $0400
@@ -18,13 +18,15 @@ CIA1_PORT_B = $DC01
 VIC_RASTER = $D012
 
 ; Game variables
-score = $FB         ; Score (2 bytes)
-lives = $FD         ; Lives remaining
-hit_cooldown = $FE  ; Collision cooldown timer
-scroll_offset = $FA ; Scroll speed counter
-left_bank = $F9     ; Left river bank position (0-39)
-right_bank = $F8    ; Right river bank position (0-39)
-random_seed = $F7   ; Random number seed
+score = $FB
+lives = $FD
+energy = $FC         ; Energy level (0-100)
+hit_cooldown = $FE
+scroll_offset = $FA
+left_bank = $F9
+right_bank = $F8
+random_seed = $F7
+anim_counter = $F6   ; Animation frame counter
 
         org $0801
 
@@ -40,8 +42,11 @@ start:
         sta score+1
         sta hit_cooldown
         sta scroll_offset
+        sta anim_counter
         lda #3
         sta lives
+        lda #100
+        sta energy
 
         ; Initialize river banks
         lda #4
@@ -69,8 +74,18 @@ clr:
         sta SCREEN+$2e8,x
         inx
         bne clr
+        
+        ; Setup multicolor sprite mode BEFORE drawing text
+        lda #$01
+        sta $D025          ; Sprite multicolor 1 (white)
+        lda #$00
+        sta $D026          ; Sprite multicolor 2 (black)
+        
+        ; Enable multicolor for sprite 0 (otter)
+        lda #%00000001
+        sta $D01C
 
-        ; Draw initial river FIRST (rows 3-24)
+        ; Draw initial river (rows 3-24)
         ldx #3
 init_river:
         stx $02
@@ -81,11 +96,9 @@ init_river:
         cpx #25
         bne init_river
 
-        ; NOW draw UI on top (will never be touched by scrolling)
-        ; Display title (row 0, centered at column 15)
+        ; Draw UI
         ldx #0
-title:  
-        lda txt_title,x
+title:  lda txt_title,x
         beq show_score
         sta SCREEN+15,x
         lda #5
@@ -94,7 +107,6 @@ title:
         jmp title
 
 show_score:
-        ; Display "SCORE:" at row 1, column 0
         ldx #0
 score_loop:
         lda txt_score,x
@@ -107,11 +119,10 @@ score_loop:
         bne score_loop
 
 show_lives:
-        ; Display "LIVES:" at row 1, column 32
         ldx #0
 lives_loop:
         lda txt_lives,x
-        beq setup_sprites
+        beq show_energy
         sta SCREEN+32,x
         lda #1
         sta COLOR_RAM+32,x
@@ -119,85 +130,100 @@ lives_loop:
         cpx #6
         bne lives_loop
 
+show_energy:
+        ldx #0
+energy_loop:
+        lda txt_energy,x
+        beq setup_sprites
+        sta SCREEN+48,x     ; Row 1, column 8 (after LIVES at col 0-5)
+        lda #1
+        sta COLOR_RAM+48,x
+        inx
+        cpx #8
+        bne energy_loop
+
 setup_sprites:
-        ; Update score and lives displays
         jsr update_score
         jsr update_lives
+        jsr update_energy
 
         ; Copy sprite data
         ldx #0
-cpy:    
-        lda spr_otter,x
+cpy:    lda spr_otter_1,x
         sta $0340,x
-        lda spr_fish,x
+        lda spr_otter_2,x
         sta $0380,x
-        lda spr_gator,x
+        lda spr_otter_3,x
         sta $03C0,x
+        lda spr_fish,x
+        sta $0400,x
+        lda spr_gator,x
+        sta $0440,x
         inx
         cpx #64
         bne cpy
 
-        ; Enable sprites 0-6
+        ; Enable sprites
         lda #%01111111
         sta VIC_SPRITE_ENABLE
 
         ; Sprite pointers
         lda #$0D
-        sta $07F8           ; Otter
-        lda #$0E
+        sta $07F8           ; Otter (will animate between $0D, $0E, $0F)
+        lda #$10
         sta $07F9           ; Fish 1
         sta $07FA           ; Fish 2
         sta $07FB           ; Fish 3
-        lda #$0F
+        lda #$11
         sta $07FC           ; Gator 1
         sta $07FD           ; Gator 2
         sta $07FE           ; Eagle
 
         ; Sprite colors
-        lda #9
-        sta VIC_SPRITE_COLOR+0      ; Brown otter
+        lda #8              ; Orange/brown for otter
+        sta VIC_SPRITE_COLOR+0
         lda #7
-        sta VIC_SPRITE_COLOR+1      ; Yellow fish
+        sta VIC_SPRITE_COLOR+1
         sta VIC_SPRITE_COLOR+2
         sta VIC_SPRITE_COLOR+3
         lda #5
-        sta VIC_SPRITE_COLOR+4      ; Green gators
+        sta VIC_SPRITE_COLOR+4
         sta VIC_SPRITE_COLOR+5
         lda #1
-        sta VIC_SPRITE_COLOR+6      ; White eagle
+        sta VIC_SPRITE_COLOR+6
 
-        ; Init sprite positions
-        lda #160        ; Otter in center
+        ; Init positions
+        lda #160
         sta VIC_SPRITE_X+0
         lda #200
         sta VIC_SPRITE_Y+0
 
-        lda #80         ; Fish 1
+        lda #80
         sta VIC_SPRITE_X+2
         lda #50
         sta VIC_SPRITE_Y+2
 
-        lda #150        ; Fish 2
+        lda #150
         sta VIC_SPRITE_X+4
         lda #100
         sta VIC_SPRITE_Y+4
 
-        lda #200        ; Fish 3
+        lda #200
         sta VIC_SPRITE_X+6
         lda #150
         sta VIC_SPRITE_Y+6
 
-        lda #100        ; Gator 1
+        lda #100
         sta VIC_SPRITE_X+8
         lda #60
         sta VIC_SPRITE_Y+8
 
-        lda #180        ; Gator 2
+        lda #180
         sta VIC_SPRITE_X+10
         lda #130
         sta VIC_SPRITE_Y+10
 
-        lda #140        ; Eagle
+        lda #140
         sta VIC_SPRITE_X+12
         lda #30
         sta VIC_SPRITE_Y+12
@@ -212,7 +238,33 @@ wait2:  lda VIC_RASTER
         cmp #250
         beq wait2
 
-        ; Check joystick
+        ; Animate otter sprite (cycle through 3 frames)
+        inc anim_counter
+        lda anim_counter
+        cmp #10
+        bcc skip_anim
+        lda #0
+        sta anim_counter
+        
+        ; Cycle sprite pointer: $0D -> $0E -> $0F -> $0D
+        lda $07F8
+        cmp #$0D
+        beq set_frame2
+        cmp #$0E
+        beq set_frame3
+        lda #$0D
+        sta $07F8
+        jmp skip_anim
+set_frame2:
+        lda #$0E
+        sta $07F8
+        jmp skip_anim
+set_frame3:
+        lda #$0F
+        sta $07F8
+skip_anim:
+
+        ; Joystick input
         lda CIA1_PORT_B
         and #$01
         bne skip_up
@@ -244,19 +296,19 @@ skip_left:
         cmp #255
         bcs skip_right
         inc VIC_SPRITE_X+0
-
 skip_right:
+
         ; Scroll river
         inc scroll_offset
         lda scroll_offset
         cmp #8
-        bcs do_scroll_now
+        bcs do_scroll
         jmp no_scroll_yet
-
-do_scroll_now:
+do_scroll:
         lda #0
         sta scroll_offset
         jsr scroll_river
+
         ; Move sprites
         lda VIC_SPRITE_Y+2
         clc
@@ -341,50 +393,154 @@ g2_ok:
 eagle_ok:
 
 no_scroll_yet:
-        ; Decrease hit cooldown
-        lda hit_cooldown
-        beq check_collisions
-        dec hit_cooldown
-        jmp no_collision
 
 check_collisions:
-        ; Check sprite-to-background collision
+        ; Always check bank collisions (no cooldown for banks)
         lda VIC_SPRITE_BG_COLLISION
         and #$01
+        bne bank_collision
+        
+        ; Handle sprite collision cooldown
+        lda hit_cooldown
         beq check_sprite_collision
-
-        ; Hit riverbank!
+        dec hit_cooldown
+        jmp no_collision
+        
+bank_collision:
+        ; Clear collision register (read twice to clear)
+        lda VIC_SPRITE_BG_COLLISION
+        lda VIC_SPRITE_BG_COLLISION
+        
+        ; Flash background RED to show bank hit
+        lda #2
+        sta VIC_BACKGROUND
+        
+        ; Drain energy
+        lda energy
+        sec
+        sbc #5
+        bcs bank_energy_ok
+        lda #0
+bank_energy_ok:
+        sta energy
+        jsr update_energy
+        
+        ; Reset background
+        lda #6
+        sta VIC_BACKGROUND
+        
+        ; Check if energy depleted
+        lda energy
+        bne bank_continue
+        
+        ; Lost a life!
         dec lives
         lda lives
-        beq game_over
-
+        bne reset_energy_bank
+        jmp game_over
+        
+reset_energy_bank:
         lda #100
+        sta energy
+        jsr update_energy
+        jsr update_lives
+        
+bank_continue:
+        ; Set cooldown
+        lda #50
         sta hit_cooldown
 
-        jsr update_lives
-
-        ; Flash border
-        lda #2
-        sta VIC_BORDER
-        ldx #0
-bank_flash:
-        inx
-        bne bank_flash
-        lda #0
-        sta VIC_BORDER
-
 check_sprite_collision:
-        ; Check sprite-to-sprite collisions
+        ; Check sprite collisions
         lda VIC_SPRITE_COLLISION
         sta $02
-        beq no_collision
-
-        ; Check fish collisions
+        bne has_collision
+        jmp no_collision
+        
+has_collision:
+        ; Check fish
         lda $02
         and #$0E
+        bne hit_fish
+        jmp check_enemies
+        
+hit_fish:
+        ; Simplified collision - just check Y distance (fish move down)
+        ; If Y is close, count it as a hit
+        lda $02
+        and #$02
+        beq check_f2
+        ; Check fish 1 - is otter within 20 pixels vertically?
+        lda VIC_SPRITE_Y+2
+        sec
+        sbc #20
+        cmp VIC_SPRITE_Y+0
+        bcs check_f2
+        lda VIC_SPRITE_Y+2
+        clc
+        adc #20
+        cmp VIC_SPRITE_Y+0
+        bcc check_f2
+        jmp caught_fish1
+        
+check_f2:
+        lda $02
+        and #$04
+        beq check_f3
+        ; Check fish 2
+        lda VIC_SPRITE_Y+4
+        sec
+        sbc #20
+        cmp VIC_SPRITE_Y+0
+        bcs check_f3
+        lda VIC_SPRITE_Y+4
+        clc
+        adc #20
+        cmp VIC_SPRITE_Y+0
+        bcc check_f3
+        jmp caught_fish2
+        
+check_f3:
+        lda $02
+        and #$08
         beq check_enemies
-
-        ; Hit a fish!
+        ; Check fish 3
+        lda VIC_SPRITE_Y+6
+        sec
+        sbc #20
+        cmp VIC_SPRITE_Y+0
+        bcs check_enemies
+        lda VIC_SPRITE_Y+6
+        clc
+        adc #20
+        cmp VIC_SPRITE_Y+0
+        bcc check_enemies
+        jmp caught_fish3
+        
+caught_fish1:
+        lda #250
+        sta VIC_SPRITE_Y+2
+        jmp add_fish_bonus
+caught_fish2:
+        lda #250
+        sta VIC_SPRITE_Y+4
+        jmp add_fish_bonus
+caught_fish3:
+        lda #250
+        sta VIC_SPRITE_Y+6
+        
+add_fish_bonus:
+        ; Hit fish - add energy and score
+        lda energy
+        clc
+        adc #10
+        cmp #101
+        bcc energy_ok
+        lda #100
+energy_ok:
+        sta energy
+        jsr update_energy
+        
         sed
         clc
         lda score
@@ -397,40 +553,98 @@ check_sprite_collision:
 
         jsr update_score
 
-        ; Move caught fish off screen
-        lda $02
-        and #$02
-        beq not_f1
-        lda #250
-        sta VIC_SPRITE_Y+2
-not_f1:
-        lda $02
-        and #$04
-        beq not_f2
-        lda #250
-        sta VIC_SPRITE_Y+4
-not_f2:
-        lda $02
-        and #$08
-        beq check_enemies
-        lda #250
-        sta VIC_SPRITE_Y+6
+        jmp check_enemies
 
 check_enemies:
-        ; Check enemy collisions
+        ; Check enemies
         lda $02
         and #$70
-        beq no_collision
+        bne has_enemy_collision
+        jmp no_collision_jump
+        
+has_enemy_collision:
+        
+        ; Refine enemy collision - check if within 12 pixels
+        lda $02
+        and #$10
+        beq check_g2
+        ; Check gator 1
+        lda VIC_SPRITE_Y+0
+        sec
+        sbc VIC_SPRITE_Y+8
+        cmp #12
+        bcs check_g2
+        lda VIC_SPRITE_X+0
+        sec
+        sbc VIC_SPRITE_X+8
+        cmp #12
+        bcs check_g2
+        jmp hit_enemy
+        
+check_g2:
+        lda $02
+        and #$20
+        beq check_eagle
+        ; Check gator 2
+        lda VIC_SPRITE_Y+0
+        sec
+        sbc VIC_SPRITE_Y+10
+        cmp #12
+        bcs check_eagle
+        lda VIC_SPRITE_X+0
+        sec
+        sbc VIC_SPRITE_X+10
+        cmp #12
+        bcs check_eagle
+        jmp hit_enemy
+        
+check_eagle:
+        lda $02
+        and #$40
+        beq no_collision_jump
+        ; Check eagle
+        lda VIC_SPRITE_Y+0
+        sec
+        sbc VIC_SPRITE_Y+12
+        cmp #12
+        bcs no_collision_jump
+        lda VIC_SPRITE_X+0
+        sec
+        sbc VIC_SPRITE_X+12
+        cmp #12
+        bcs no_collision_jump
+        
+hit_enemy:
 
-        ; Hit an enemy!
+        ; Hit enemy - lose energy
+        lda energy
+        sec
+        sbc #20
+        bcs enemy_energy_ok
+        lda #0
+enemy_energy_ok:
+        sta energy
+        jsr update_energy
+        
+        ; Check if energy depleted
+        lda energy
+        bne energy_remaining
+        
+        ; Lost a life!
         dec lives
         lda lives
-        beq game_over
+        bne reset_energy
+        jmp game_over
+        
+reset_energy:
+        lda #100
+        sta energy
+        jsr update_energy
+        jsr update_lives
 
+energy_remaining:
         lda #100
         sta hit_cooldown
-
-        jsr update_lives
 
         ; Flash border
         lda #2
@@ -440,6 +654,9 @@ flash:  inx
         bne flash
         lda #0
         sta VIC_BORDER
+
+no_collision_jump:
+        jmp no_collision
 
 no_collision:
         jmp game_loop
@@ -461,7 +678,6 @@ gover:  lda txt_gameover,x
 forever:
         jmp forever
 
-; Update score display (row 1, after "SCORE:")
 update_score:
         lda score+1
         lsr
@@ -498,21 +714,78 @@ update_score:
         sta COLOR_RAM+10
         rts
 
-; Update lives display (row 1, after "LIVES:")
 update_lives:
         lda lives
         ora #$30
-        sta SCREEN+38
+        sta SCREEN+78
         lda #7
-        sta COLOR_RAM+38
+        sta COLOR_RAM+78
+        rts
+
+update_energy:
+        ; Display energy at row 1, columns 16-18 (positions 56-58) - after "ENERGY:"
+        lda energy
+        cmp #100
+        bne not_100
+        lda #$31  ; '1'
+        sta SCREEN+56
+        lda #$30  ; '0'
+        sta SCREEN+57
+        sta SCREEN+58
+        lda #7
+        sta COLOR_RAM+56
+        sta COLOR_RAM+57
+        sta COLOR_RAM+58
+        rts
+        
+not_100:
+        lda #$20  ; Space for leading digit
+        sta SCREEN+56
+        
+        lda energy
+        cmp #10
+        bcs tens_digit
+        
+        ; Single digit (0-9)
+        lda #$20
+        sta SCREEN+57
+        lda energy
+        ora #$30
+        sta SCREEN+58
+        jmp color_energy
+        
+tens_digit:
+        ; Two digits (10-99)
+        lda energy
+        ldx #0
+div10:
+        cmp #10
+        bcc done_div
+        sbc #10
+        inx
+        jmp div10
+done_div:
+        pha
+        txa
+        ora #$30
+        sta SCREEN+57
+        pla
+        ora #$30
+        sta SCREEN+58
+        
+color_energy:
+        lda #7
+        sta COLOR_RAM+56
+        sta COLOR_RAM+57
+        sta COLOR_RAM+58
         rts
 
 draw_river_row:
-        ; Compute 16-bit offset = row * 40
+        ; Compute offset = row * 40
         lda #0
-        sta $03  ; offset low
-        sta $04  ; offset high
-        ldx $02  ; row
+        sta $03
+        sta $04
+        ldx $02
         beq offset_done
 add40:
         clc
@@ -525,7 +798,7 @@ add40:
         dex
         bne add40
 offset_done:
-        ; Screen ptr = SCREEN + offset
+        ; Screen ptr
         clc
         lda $03
         adc #<SCREEN
@@ -533,14 +806,14 @@ offset_done:
         lda $04
         adc #>SCREEN
         sta $04
-        ; Color ptr = COLOR_RAM + offset = screen ptr + $D400
+        ; Color ptr
         clc
         lda $03
-        adc #<$D400  ; $00
-        sta $05  ; color low
+        adc #<$D400
+        sta $05
         lda $04
-        adc #>$D400  ; $D4
-        sta $06  ; color high
+        adc #>$D400
+        sta $06
 
         ldy #0
 draw_col:
@@ -548,14 +821,17 @@ draw_col:
         bcc is_bank
         cpy right_bank
         bcs is_bank
-        ; Water
+        ; Water - use blue space
         lda #$20
         sta ($03),y
+        lda #6
+        sta ($05),y
         jmp next_col
 is_bank:
-        lda #$A0
+        ; Bank - use SOLID block (160 = $A0) which triggers collision
+        lda #$E0          ; Solid block character
         sta ($03),y
-        lda #5
+        lda #5            ; Green
         sta ($05),y
 next_col:
         iny
@@ -563,7 +839,6 @@ next_col:
         bne draw_col
         rts
 
-; Adjust river banks
 adjust_banks:
         jsr get_random
         and #$03
@@ -626,7 +901,6 @@ widen_right:
 width_ok:
         rts
 
-; Random number generator
 get_random:
         lda random_seed
         asl
@@ -637,17 +911,14 @@ get_random:
         sta random_seed
         rts
 
-; Scroll river (rows 3-24 only, protect UI in rows 0-2)
 scroll_river:
         ldx #0
 scroll_loop:
-        ; Scroll from row 23 to 24 (bottom)
         lda SCREEN+920,x
         sta SCREEN+960,x
         lda COLOR_RAM+920,x
         sta COLOR_RAM+960,x
 
-        ; Continue scrolling upward to row 4
         lda SCREEN+880,x
         sta SCREEN+920,x
         lda COLOR_RAM+880,x
@@ -743,7 +1014,6 @@ scroll_loop:
         lda COLOR_RAM+160,x
         sta COLOR_RAM+200,x
 
-        ; Scroll row 3 to row 4 (120 -> 160)
         lda SCREEN+120,x
         sta SCREEN+160,x
         lda COLOR_RAM+120,x
@@ -755,14 +1025,12 @@ scroll_loop:
         jmp scroll_loop
 
 done_scroll:
-        ; Draw new row at row 3
         lda #3
         sta $02
         jsr draw_river_row
         jsr adjust_banks
         rts
 
-; Text data
 txt_title:
         dc.b $0f,$14,$14,$05,$12,$20,$12,$01,$09,$04,0
 
@@ -772,19 +1040,42 @@ txt_score:
 txt_lives:
         dc.b $0c,$09,$16,$05,$13,$3a,0
 
+txt_energy:
+        dc.b $05,$0e,$05,$12,$07,$19,$3a,0
+
 txt_gameover:
         dc.b $07,$01,$0d,$05,$20,$0f,$16,$05,$12,0
 
-; Sprite data
-spr_otter:
-        dc.b $00,$18,$00,$00,$3c,$00,$00,$7e
-        dc.b $00,$00,$7e,$00,$00,$7e,$00,$00
-        dc.b $3c,$00,$00,$00,$00,$00,$3c,$00
-        dc.b $00,$7e,$00,$00,$7e,$00,$00,$7e
-        dc.b $00,$00,$7e,$00,$00,$3c,$00,$00
-        dc.b $18,$00,$00,$18,$00,$00,$18,$00
-        dc.b $00,$18,$00,$00,$18,$00,$00,$18
-        dc.b $00,$00,$00,$00,$00,$00,$00,$02
+; Otter sprite data (3 frames for animation)
+spr_otter_1:
+        dc.b $00,$3c,$00,$00,$eb,$00,$00,$eb
+        dc.b $00,$00,$eb,$00,$00,$eb,$00,$00
+        dc.b $3c,$00,$00,$c3,$00,$00,$eb,$00
+        dc.b $00,$eb,$00,$00,$eb,$00,$00,$eb
+        dc.b $00,$00,$eb,$00,$00,$eb,$00,$00
+        dc.b $3b,$00,$00,$0b,$00,$00,$ec,$00
+        dc.b $03,$b0,$00,$0e,$c0,$00,$03,$00
+        dc.b $00,$00,$00,$00,$00,$00,$00,$88
+
+spr_otter_2:
+        dc.b $00,$3c,$00,$00,$eb,$00,$00,$eb
+        dc.b $00,$00,$eb,$00,$00,$eb,$00,$00
+        dc.b $3c,$00,$00,$c3,$00,$00,$eb,$00
+        dc.b $00,$eb,$00,$00,$eb,$00,$00,$eb
+        dc.b $00,$00,$eb,$00,$00,$eb,$00,$00
+        dc.b $eb,$00,$00,$3b,$00,$00,$3b,$00
+        dc.b $00,$3b,$00,$00,$3b,$00,$00,$3b
+        dc.b $00,$00,$3b,$00,$00,$0c,$00,$88
+
+spr_otter_3:
+        dc.b $00,$3c,$00,$00,$eb,$00,$00,$eb
+        dc.b $00,$00,$eb,$00,$00,$eb,$00,$00
+        dc.b $3c,$00,$00,$c3,$00,$00,$eb,$00
+        dc.b $00,$eb,$00,$00,$eb,$00,$00,$eb
+        dc.b $00,$00,$eb,$00,$00,$eb,$00,$00
+        dc.b $ec,$00,$00,$e0,$00,$00,$3b,$00
+        dc.b $00,$0e,$c0,$00,$03,$b0,$00,$00
+        dc.b $c0,$00,$00,$00,$00,$00,$00,$88
 
 spr_fish:
         dc.b $00,$00,$00,$00,$00,$00,$00,$00
@@ -805,5 +1096,3 @@ spr_gator:
         dc.b $aa,$40,$a6,$a8,$40,$aa,$a0,$00
         dc.b $aa,$80,$00,$aa,$01,$04,$a8,$01
         dc.b $04,$aa,$aa,$aa,$aa,$aa,$aa,$85
-
-        rts
