@@ -1,5 +1,3 @@
-        processor 6502
-
 ; ===============================================
 ; OTTER RAID - COLLISION FIX: Just ignore banks!
 ; ===============================================
@@ -635,7 +633,7 @@ energy_ok:
 check_enemies:
         ; Check enemies
         lda $02
-        and #$B0
+        and #$F0
         bne has_enemy_collision
         jmp no_collision_jump
         
