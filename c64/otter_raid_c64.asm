@@ -16,6 +16,7 @@ VIC_SPRITE_COLLISION = $D01E
 VIC_SPRITE_BG_COLLISION = $D01F
 CIA1_PORT_B = $DC01
 VIC_RASTER = $D012
+VIC_CTRL1 = $D011
 
 ; Game variables
 score = $FB
@@ -27,6 +28,17 @@ left_bank = $F9
 right_bank = $F8
 random_seed = $F7
 anim_counter = $F6   ; Animation frame counter
+fine_scroll = $F5
+frame_counter = $F4
+second_counter = $F3
+eagle_state = $F2
+eagle_timer = $F1
+eagle_dx = $F0
+gator_dir = $EF
+gator_dir2 = $EE
+gator_dir3 = $ED
+
+EAGLE_REPEAT_SECONDS = 60
 
         org $0801
 
@@ -43,6 +55,11 @@ start:
         sta hit_cooldown
         sta scroll_offset
         sta anim_counter
+        sta fine_scroll
+        sta frame_counter
+        sta second_counter
+        sta eagle_state
+        sta eagle_timer
         lda #3
         sta lives
         lda #100
@@ -57,6 +74,11 @@ start:
         ; Initialize random seed
         lda #$A5
         sta random_seed
+
+        lda #1
+        sta gator_dir
+        sta gator_dir2
+        sta gator_dir3
 
         ; Setup colors
         lda #0
@@ -159,12 +181,16 @@ cpy:    lda spr_otter_1,x
         sta $0400,x
         lda spr_gator,x
         sta $0440,x
+        lda spr_gator_open,x
+        sta $0480,x
+        lda spr_eagle,x
+        sta $04C0,x
         inx
         cpx #64
         bne cpy
 
         ; Enable sprites
-        lda #%01111111
+        lda #%11111111
         sta VIC_SPRITE_ENABLE
 
         ; Sprite pointers
@@ -177,6 +203,8 @@ cpy:    lda spr_otter_1,x
         lda #$11
         sta $07FC           ; Gator 1
         sta $07FD           ; Gator 2
+        sta $07FF           ; Gator 3
+        lda #$13
         sta $07FE           ; Eagle
 
         ; Sprite colors
@@ -189,6 +217,7 @@ cpy:    lda spr_otter_1,x
         lda #5
         sta VIC_SPRITE_COLOR+4
         sta VIC_SPRITE_COLOR+5
+        sta VIC_SPRITE_COLOR+7
         lda #1
         sta VIC_SPRITE_COLOR+6
 
@@ -213,15 +242,20 @@ cpy:    lda spr_otter_1,x
         lda #150
         sta VIC_SPRITE_Y+6
 
-        lda #100
-        sta VIC_SPRITE_X+8
         lda #60
+        sta VIC_SPRITE_X+8
+        lda #90
         sta VIC_SPRITE_Y+8
 
-        lda #180
+        lda #200
         sta VIC_SPRITE_X+10
-        lda #130
+        lda #140
         sta VIC_SPRITE_Y+10
+
+        lda #130
+        sta VIC_SPRITE_X+14
+        lda #190
+        sta VIC_SPRITE_Y+14
 
         lda #140
         sta VIC_SPRITE_X+12
@@ -298,47 +332,99 @@ skip_left:
         inc VIC_SPRITE_X+0
 skip_right:
 
-        ; Scroll river
-        inc scroll_offset
-        lda scroll_offset
-        cmp #8
-        bcs do_scroll
-        jmp no_scroll_yet
-do_scroll:
-        lda #0
-        sta scroll_offset
+        ; Smooth scroll using VIC fine scroll
+        inc fine_scroll
+        lda fine_scroll
+        and #$07
+        sta fine_scroll
+
+        lda VIC_CTRL1
+        and #%11111000
+        ora fine_scroll
+        sta VIC_CTRL1
+
+        lda fine_scroll
+        bne no_scroll_yet
         jsr scroll_river
 
-        ; Move sprites
-        lda VIC_SPRITE_Y+2
-        clc
-        adc #8
-        sta VIC_SPRITE_Y+2
+no_scroll_yet:
+        ; Move fish downward smoothly
+        inc VIC_SPRITE_Y+2
+        inc VIC_SPRITE_Y+4
+        inc VIC_SPRITE_Y+6
 
-        lda VIC_SPRITE_Y+4
-        clc
-        adc #8
-        sta VIC_SPRITE_Y+4
+        ; Animate gator mouths
+        lda anim_counter
+        and #$08
+        beq gator_frame_closed
+        lda #$12
+        sta $07FC
+        sta $07FD
+        sta $07FF
+        jmp move_gators
+gator_frame_closed:
+        lda #$11
+        sta $07FC
+        sta $07FD
+        sta $07FF
 
-        lda VIC_SPRITE_Y+6
-        clc
-        adc #8
-        sta VIC_SPRITE_Y+6
+move_gators:
+        ; Gator horizontal patrol
+        lda gator_dir
+        bne g1_right
+        dec VIC_SPRITE_X+8
+        lda VIC_SPRITE_X+8
+        cmp #40
+        bcs g2_move
+        lda #1
+        sta gator_dir
+        jmp g2_move
+g1_right:
+        inc VIC_SPRITE_X+8
+        lda VIC_SPRITE_X+8
+        cmp #220
+        bcc g2_move
+        lda #0
+        sta gator_dir
 
-        lda VIC_SPRITE_Y+8
-        clc
-        adc #8
-        sta VIC_SPRITE_Y+8
+g2_move:
+        lda gator_dir2
+        bne g2_right
+        dec VIC_SPRITE_X+10
+        lda VIC_SPRITE_X+10
+        cmp #40
+        bcs g3_move
+        lda #1
+        sta gator_dir2
+        jmp g3_move
+g2_right:
+        inc VIC_SPRITE_X+10
+        lda VIC_SPRITE_X+10
+        cmp #220
+        bcc g3_move
+        lda #0
+        sta gator_dir2
 
-        lda VIC_SPRITE_Y+10
-        clc
-        adc #8
-        sta VIC_SPRITE_Y+10
+g3_move:
+        lda gator_dir3
+        bne g3_right
+        dec VIC_SPRITE_X+14
+        lda VIC_SPRITE_X+14
+        cmp #40
+        bcs eagle_logic
+        lda #1
+        sta gator_dir3
+        jmp eagle_logic
+g3_right:
+        inc VIC_SPRITE_X+14
+        lda VIC_SPRITE_X+14
+        cmp #220
+        bcc eagle_logic
+        lda #0
+        sta gator_dir3
 
-        lda VIC_SPRITE_X+12
-        clc
-        adc #8
-        sta VIC_SPRITE_X+12
+eagle_logic:
+        jsr update_eagle
 
         ; Wrap fish
         lda VIC_SPRITE_Y+2
@@ -384,18 +470,9 @@ g1_ok:
         sta VIC_SPRITE_X+10
 g2_ok:
 
-        ; Wrap eagle
-        lda VIC_SPRITE_X+12
-        cmp #240
-        bcc eagle_ok
-        lda #60
-        sta VIC_SPRITE_X+12
-eagle_ok:
-
-no_scroll_yet:
-
 check_collisions:
         ; Always check bank collisions (no cooldown for banks)
+        jsr enforce_otter_bounds
         lda VIC_SPRITE_BG_COLLISION
         and #$01
         bne bank_collision
@@ -558,7 +635,7 @@ energy_ok:
 check_enemies:
         ; Check enemies
         lda $02
-        and #$70
+        and #$B0
         bne has_enemy_collision
         jmp no_collision_jump
         
@@ -584,16 +661,33 @@ has_enemy_collision:
 check_g2:
         lda $02
         and #$20
-        beq check_eagle
+        beq check_g3
         ; Check gator 2
         lda VIC_SPRITE_Y+0
         sec
         sbc VIC_SPRITE_Y+10
         cmp #12
-        bcs check_eagle
+        bcs check_g3
         lda VIC_SPRITE_X+0
         sec
         sbc VIC_SPRITE_X+10
+        cmp #12
+        bcs check_g3
+        jmp hit_enemy
+
+check_g3:
+        lda $02
+        and #$80
+        beq check_eagle
+        ; Check gator 3
+        lda VIC_SPRITE_Y+0
+        sec
+        sbc VIC_SPRITE_Y+14
+        cmp #12
+        bcs check_eagle
+        lda VIC_SPRITE_X+0
+        sec
+        sbc VIC_SPRITE_X+14
         cmp #12
         bcs check_eagle
         jmp hit_enemy
@@ -615,6 +709,9 @@ check_eagle:
         bcs no_collision_jump
         
 hit_enemy:
+        lda $02
+        and #$40
+        bne eagle_hit
 
         ; Hit enemy - lose energy
         lda energy
@@ -658,6 +755,22 @@ flash:  inx
 no_collision_jump:
         jmp no_collision
 
+eagle_hit:
+        dec lives
+        jsr update_lives
+        lda lives
+        beq game_over
+        lda #160
+        sta VIC_SPRITE_X+0
+        lda #200
+        sta VIC_SPRITE_Y+0
+        lda #100
+        sta energy
+        jsr update_energy
+        lda #100
+        sta hit_cooldown
+        jmp no_collision
+
 no_collision:
         jmp game_loop
 
@@ -677,6 +790,134 @@ gover:  lda txt_gameover,x
 
 forever:
         jmp forever
+
+update_eagle:
+        lda eagle_state
+        bne eagle_active
+
+        inc frame_counter
+        lda frame_counter
+        cmp #50
+        bcc eagle_done
+        lda #0
+        sta frame_counter
+        inc second_counter
+
+        lda eagle_timer
+        bne eagle_countdown_init
+        jsr get_random
+        and #$1F
+        clc
+        adc #90
+        sta eagle_timer
+
+eagle_countdown_init:
+        dec eagle_timer
+        bne eagle_done
+
+        lda #1
+        sta eagle_state
+        jsr get_random
+        and #$01
+        beq eagle_from_left
+        lda #240
+        sta VIC_SPRITE_X+12
+        lda #$FF
+        sta eagle_dx
+        jmp eagle_spawned
+eagle_from_left:
+        lda #40
+        sta VIC_SPRITE_X+12
+        lda #1
+        sta eagle_dx
+
+eagle_spawned:
+        lda #30
+        sta VIC_SPRITE_Y+12
+        lda #$13
+        sta $07FE
+        jmp eagle_done
+
+eagle_active:
+        lda eagle_state
+        cmp #1
+        beq eagle_dive
+
+        ; rising away
+        dec VIC_SPRITE_Y+12
+        lda eagle_dx
+        bmi eagle_up_left
+        inc VIC_SPRITE_X+12
+        jmp eagle_up_pos_done
+eagle_up_left:
+        dec VIC_SPRITE_X+12
+eagle_up_pos_done:
+        lda VIC_SPRITE_Y+12
+        cmp #18
+        bcs eagle_done
+        lda #0
+        sta eagle_state
+        lda #EAGLE_REPEAT_SECONDS
+        sta eagle_timer
+        lda #250
+        sta VIC_SPRITE_Y+12
+        rts
+
+eagle_dive:
+        inc VIC_SPRITE_Y+12
+        lda eagle_dx
+        bmi eagle_down_left
+        inc VIC_SPRITE_X+12
+        jmp eagle_down_pos_done
+eagle_down_left:
+        dec VIC_SPRITE_X+12
+eagle_down_pos_done:
+        lda VIC_SPRITE_Y+12
+        cmp #120
+        bcc eagle_done
+        lda #2
+        sta eagle_state
+        lda eagle_dx
+        eor #$FF
+        clc
+        adc #1
+        sta eagle_dx
+
+eagle_done:
+        rts
+
+enforce_otter_bounds:
+        ; Conservative dynamic clamp by bank estimates
+        lda left_bank
+        asl
+        asl
+        asl
+        clc
+        adc #24
+        sta $03
+
+        lda right_bank
+        asl
+        asl
+        asl
+        sec
+        sbc #16
+        sta $04
+
+        lda VIC_SPRITE_X+0
+        cmp $03
+        bcs check_right_bound
+        lda $03
+        sta VIC_SPRITE_X+0
+
+check_right_bound:
+        lda VIC_SPRITE_X+0
+        cmp $04
+        bcc bounds_done
+        lda $04
+        sta VIC_SPRITE_X+0
+bounds_done:
+        rts
 
 update_score:
         lda score+1
@@ -1076,6 +1317,26 @@ spr_otter_3:
         dc.b $ec,$00,$00,$e0,$00,$00,$3b,$00
         dc.b $00,$0e,$c0,$00,$03,$b0,$00,$00
         dc.b $c0,$00,$00,$00,$00,$00,$00,$88
+
+spr_gator_open:
+        dc.b $00,$00,$00,$00,$00,$00,$00,$00
+        dc.b $00,$00,$00,$00,$00,$00,$00,$00
+        dc.b $00,$00,$00,$00,$00,$00,$00,$00
+        dc.b $00,$00,$02,$00,$00,$2a,$00,$00
+        dc.b $aa,$0a,$82,$a9,$2a,$aa,$81,$a6
+        dc.b $aa,$40,$a2,$a8,$40,$8a,$a0,$00
+        dc.b $8a,$80,$00,$88,$01,$04,$88,$01
+        dc.b $04,$aa,$aa,$aa,$aa,$aa,$aa,$85
+
+spr_eagle:
+        dc.b $00,$00,$00,$00,$00,$00,$00,$00
+        dc.b $00,$00,$10,$00,$00,$38,$00,$00
+        dc.b $7c,$00,$00,$fe,$00,$03,$ff,$80
+        dc.b $07,$ff,$c0,$0f,$ff,$e0,$1f,$ff
+        dc.b $f0,$0f,$ff,$e0,$07,$ff,$c0,$03
+        dc.b $ff,$80,$00,$fe,$00,$00,$7c,$00
+        dc.b $00,$38,$00,$00,$10,$00,$00,$00
+        dc.b $00,$00,$00,$00,$00,$00,$00,$01
 
 spr_fish:
         dc.b $00,$00,$00,$00,$00,$00,$00,$00
