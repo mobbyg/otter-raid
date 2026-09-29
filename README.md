@@ -21,7 +21,7 @@ The goal is not to survive forever. **Get Ollie home.**
 
 If Ollie runs out of Life Points, a heart is lost and the run resets. An eagle catch also costs a heart and resets the run. Lose all three hearts and it's Game Over.
 
-After losing a heart, Ollie can earn it back by reaching a recovery target of **Life Points at loss + 5,000**. The target is tracked separately for each heart loss, up to three hearts.
+After losing a heart, Ollie can earn it back by reaching a recovery target of **Life Points at loss + 5,000**. The target is tracked from the Life Point total at the moment of each heart loss, up to three hearts.
 
 ## Controls
 
@@ -101,7 +101,7 @@ Crawfish are not guaranteed to be safely reachable. A player may have to decide 
 
 The river scrolls downward to create the illusion of swimming upstream.
 
-The rewrite uses **40 smooth river sections** rather than jagged row-by-row randomness. Sections stitch together through shared endpoint geometry and controlled bends/width changes. Sections can be stitched together to create bends, varying widths, and changing river geometry.
+The rewrite uses **40 smooth river sections** rather than jagged row-by-row randomness. Sections stitch together through shared endpoint geometry and controlled bends/width changes. Only the nearby/current river data needs to be resident in RAM; the 40-section journey is a logical progression rather than 40 full sections stored at once.
 
 River sections can also provide opportunities for scenery, alligator placement, and crawfish placement. Future scenery can include islands, houses, and other river details.
 
@@ -126,7 +126,6 @@ The main game states are:
 - **GAME_OVER**
 - **HOME**
 - **HIGH_SCORES**
-- **PAUSED**
 - **PAUSED**
 
 While the main game is PLAYING, individual systems have their own state:
@@ -185,12 +184,10 @@ The implementation work is tracked in the GitHub issue for the gameplay-engine r
 
 ## Building
 
-Using DASM:
+The rewrite's build path is being standardized around VASM.
 
-    dasm otter_raid.asm -ootter_raid.prg
+    make
 
-Using the Makefile with VASM:
-
-Comment out processor=6502 on line 1 as required by the current build setup.
+The Makefile invokes `vasm6502_mot` and produces `otter_raid.prg`.
 
 <hr>
