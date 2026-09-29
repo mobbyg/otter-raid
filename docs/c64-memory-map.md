@@ -84,7 +84,7 @@ Initial allocation:
 | $2C | zp_invuln_timer | Crawfish invulnerability |
 | $2D-$2F | zp_distance | Journey distance/progress |
 | $30 | zp_game_state | TITLE/MENU/PLAYING/etc. |
-| $31 | zp_frame_counter | Frame timing |
+| $31 | zp_frame_counter | Frame timing / gameplay tick |
 | $32 | zp_random | PRNG state |
 | $33 | zp_temp | General temporary value |
 | $34-$37 | zp_ptr0 | General pointer |
@@ -172,7 +172,7 @@ The design should support:
 - enough recent history to maintain smooth scrolling
 - procedural variation between runs
 
-The exact representation is intentionally deferred until the first river-generation prototype is written.
+The river engine is now specified as smooth sections with stitched endpoints and control points. The exact byte-level control-point representation will be finalized during the river prototype.
 
 ### River width
 
@@ -341,7 +341,7 @@ Life Points are separate from score.
 - Reaching 0 Life Points: lose a heart and reset the run
 - After a heart loss, Life Points return to 1,000
 
-The exact recovery rate and any speed-based damage modifier remain gameplay-tuning decisions.
+Safe-distance recovery rate remains a tuning value. Base alligator damage is 100 Life Points.
 
 ### Hearts
 
@@ -433,9 +433,9 @@ These are intentionally **not** frozen by this document:
 - Exact player speeds
 - Exact Life Point recovery rate
 - Whether alligator damage receives a speed-based modifier
-- Maximum simultaneous active alligators
-- Maximum simultaneous active crawfish
-- Exact river segment representation
+- Exact active alligator slot layout (initial target: 4 active)
+- Maximum simultaneous active crawfish (initial target: 2)
+- Exact river section/control-point representation
 - Exact scenery representation
 - Eagle trajectory math
 - Exact HUD character layout
@@ -443,6 +443,7 @@ These are intentionally **not** frozen by this document:
 - Home celebration animation length
 - High-score persistence format
 - Music/SFX memory requirements
+- Final raster-split/fine-scroll implementation details
 - Whether a later release will bank out BASIC/KERNAL ROM
 
 These should be decided or prototyped before the portions of the memory map they affect become permanent.
@@ -462,3 +463,20 @@ The first implementation should establish:
 7. basic river scrolling
 
 Only then should enemies, collision, scoring, Life Points, eagle behavior, crawfish, and the end-game sequence be layered in.
+
+
+## Timing
+
+The rewrite will use the C64/KERNAL jiffy clock as the standard source for second-scale timing rather than inventing an unrelated wall-clock system.
+
+Gameplay code should access the jiffy clock through a timing routine and convert elapsed time into game-owned timers. This is important because the KERNAL clock itself continues while the game is PAUSED; gameplay timers must not advance during pause.
+
+The timing layer will hide PAL/NTSC timing differences so gameplay systems do not contain scattered frame-rate assumptions.
+
+## Rendering Strategy
+
+The river playfield is planned as a smooth fine-scrolling region beneath a fixed HUD row. A raster split can keep the HUD fixed while VIC-II vertical fine scrolling moves the river.
+
+When fine scrolling crosses a character-row boundary, the engine advances the logical river rows and generates only the newly exposed row rather than redrawing the entire playfield every frame.
+
+This is the preferred approach for the first smooth-scrolling prototype, subject to validation on a C64-compatible target/emulator.
