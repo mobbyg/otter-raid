@@ -47,17 +47,17 @@ Intended keyboard mapping: W = faster/upstream, A = left, S = slower/downstream,
 Joystick control is required for the initial single-player version. Keyboard controls are an additional control method. A future two-player mode may allow players to take turns.
 
 ## 4. Swimming Speed and Distance
-The game represents progress as distance traveled upstream rather than relying only on elapsed time.
+The game represents progress as distance traveled upstream rather than relying only on elapsed time. The initial journey is 40 generated river sections.
 
 This gives Up/Down movement a meaningful tradeoff: swimming faster gets Ollie home sooner, while swimming slower gives the player more time to maneuver around hazards. Higher speed can also make collisions more consequential.
 
-The exact total distance will be tuned during implementation and playtesting.
+The initial journey is **40 river sections**. The section count is deliberately tunable: it can be reduced or extended after playtesting without changing the underlying game architecture.
 
 ## 5. Life Points
 Life Points are Ollie's temporary survival resource and are separate from score.
 - Start at 1,000
 - Maximum 10,000
-- Safe swimming gradually restores Life Points
+- Life Points recover through a tracked **safe_distance** value while Ollie is making upstream progress without taking hazard damage
 - Alligator collisions remove Life Points
 - Diving longer than the free dive period removes Life Points
 - Life Points reaching zero costs one heart
@@ -66,7 +66,7 @@ The initial alligator damage target is 100 Life Points per hit. A simple speed-b
 
 When Life Points reach zero: lose one heart, end the current run, return Ollie to the beginning, and reset Life Points to 1,000. If no hearts remain, go to Game Over.
 
-After a heart has been lost, reaching each additional 5,000 Life Points may restore one heart, up to the maximum of three. This recovery mechanic will be tuned during playtesting.
+When a heart is lost, establish a recovery target at **Life Points at loss + 5,000**. Reaching that target restores one heart, up to three. A later heart loss establishes a new target from the Life Points held at that moment.
 
 ## 6. Hearts
 Ollie starts with 3 hearts.
@@ -88,7 +88,8 @@ Alligators are the primary river hazard.
 - Enter/cross the river
 - Move at varying speeds
 - Can approach from either side
-- Should not all follow the same pattern
+- Four active alligators are supported initially
+- Alligators are independent world objects and do not collide with one another
 
 Alligators should be world objects with position, side, direction, speed, and movement state rather than fixed patrol sprites.
 
@@ -105,7 +106,7 @@ Suggested state machine: waiting -> choose interval -> choose side -> enter -> s
 If the eagle catches Ollie, one heart is lost and the current run resets to the beginning. Diving makes Ollie immune.
 
 ## 10. Crawfish
-Crawfish appear randomly in the river.
+Crawfish are generated as part of the river environment and may be difficult or risky to reach.
 
 Catching/eating a crawfish gives Ollie 5 seconds of invulnerability against both alligators and the eagle.
 
@@ -147,9 +148,15 @@ When Ollie reaches home:
 The celebration should be roughly 5–10 seconds and feel like a reward. Ollie is not merely surviving indefinitely; he is trying to get home.
 
 ## 15. Title and Menu
-The title screen should use a bitmap/image-oriented presentation rather than a plain text screen, with a small simple menu inspired by Attack of the PETSCII Robots.
+The title screen should use a picture/image-oriented presentation rather than a plain text screen, with a small menu inspired by Attack of the PETSCII Robots.
 
-Potential menu entries: Start Game, Controls, High Scores.
+The main menu will include at least:
+- Start Game
+- High Scores
+- Controls
+- Exit
+
+An About entry may be added if the final screen has room.
 
 ## 16. Game States
 Use explicit game states instead of allowing unrelated systems to control one another implicitly:
@@ -160,6 +167,7 @@ Use explicit game states instead of allowing unrelated systems to control one an
 - GAME OVER
 - HOME / CELEBRATION
 - HIGH SCORES
+- PAUSED
 
 The eagle and other hazards have their own internal state machines while the main game state remains PLAYING.
 
@@ -238,16 +246,16 @@ Tune river width/bends, player speed, alligator frequency/speed, collision damag
 No tuning value is final until tested on C64-compatible hardware or emulation.
 
 ## 20. Open Design Questions
-- Exact total journey distance
-- Exact swimming speed values
+- Exact section length/distance contribution
+- Exact swimming speed values and per-frame distance contribution
 - Exact Life Point recovery rate
-- Exact speed-based alligator damage formula
-- Exact scoring formula
+- Exact speed-based alligator damage experiment, if any
+- Exact scoring point values
 - Exact eagle flight timing/trajectory
-- Exact number and behavior of simultaneous alligators
 - Final HUD layout
 - Exact title-screen artwork
 - Exact home celebration animation
 - High-score persistence format
+- Final raster-split/fine-scroll implementation details
 
 The first implementation should establish the complete playable loop before optimizing or polishing these values.
