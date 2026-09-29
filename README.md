@@ -14,14 +14,14 @@ The goal is not to survive forever. **Get Ollie home.**
 3. Avoid alligators coming from either river bank.
 4. Dive underwater to avoid alligators and the eagle.
 5. Collect crawfish for **5 seconds of invulnerability**.
-6. Recover Life Points while actively swimming upstream.
+6. Recover Life Points through safe upstream progress.
 7. Reach the end of the river.
 8. Celebrate with Auntie, Ollie, and the birthday present.
 9. See the score/high-score flow and play again.
 
 If Ollie runs out of Life Points, a heart is lost and the run resets. An eagle catch also costs a heart and resets the run. Lose all three hearts and it's Game Over.
 
-After losing a heart, Ollie can earn it back by accumulating **5,000 additional Life Points**. The recovery target is based on the Life Points Ollie has when the heart is lost, so the threshold is tracked per heart loss rather than being a fixed global value.
+After losing a heart, Ollie can earn it back by reaching a recovery target of **Life Points at loss + 5,000**. The target is tracked separately for each heart loss, up to three hearts.
 
 ## Controls
 
@@ -32,6 +32,7 @@ After losing a heart, Ollie can earn it back by accumulating **5,000 additional 
 | S | Slow down |
 | D | Move right |
 | SPACE | Dive |
+| P | Pause / resume |
 
 Joystick control is part of the initial single-player design. Keyboard support is an additional control method.
 
@@ -41,7 +42,7 @@ Joystick control is part of the initial single-player design. Keyboard support i
 
 - Start: **1,000**
 - Maximum: **10,000**
-- Recover while actively swimming upstream
+- Recover through tracked safe upstream distance
 - Alligator damage starts at **100 points**
 - Diving longer than 3 seconds costs **50 points/second**
 - Life Points are separate from score
@@ -76,7 +77,7 @@ Alligators enter from the river banks and cross the river at varying speeds.
 
 Each alligator is an independent world object with its own position, side, direction, speed, and movement state. Alligators can occupy different river rows, including facing one another from opposite banks, without interacting or colliding with each other.
 
-The rewrite uses a small pool of independent alligator objects rather than fixed patrol patterns.
+The rewrite uses a fixed pool of independent alligator objects rather than fixed patrol patterns, with **4 active alligators supported initially**. Alligators do not collide with one another.
 
 ### Eagle
 
@@ -100,7 +101,7 @@ Crawfish are not guaranteed to be safely reachable. A player may have to decide 
 
 The river scrolls downward to create the illusion of swimming upstream.
 
-The rewrite uses smooth river sections rather than jagged row-by-row randomness. Sections can be stitched together to create bends, varying widths, and changing river geometry.
+The rewrite uses **40 smooth river sections** rather than jagged row-by-row randomness. Sections stitch together through shared endpoint geometry and controlled bends/width changes. Sections can be stitched together to create bends, varying widths, and changing river geometry.
 
 River sections can also provide opportunities for scenery, alligator placement, and crawfish placement. Future scenery can include islands, houses, and other river details.
 
@@ -110,7 +111,7 @@ Progress toward home is measured by **distance traveled upstream**, not simply e
 
 Swimming faster advances the journey faster but gives the player less time to maneuver and recover Life Points. Swimming slower advances the journey more slowly but gives the player more control and time.
 
-The initial implementation will use a small number of discrete swimming speeds. Speed values will be tuned through playtesting.
+The initial implementation uses three discrete swimming speeds: **1 = slow, 2 = normal, 3 = fast**. Up/W and Down/S are held controls; the actual distance contribution of each speed will be tuned through playtesting.
 
 ## State Machines
 
@@ -125,6 +126,7 @@ The main game states are:
 - **GAME_OVER**
 - **HOME**
 - **HIGH_SCORES**
+- **PAUSED**
 - **PAUSED**
 
 While the main game is PLAYING, individual systems have their own state:
@@ -164,6 +166,12 @@ The detailed game design is in **docs/otter-raid-game-design.md**.
 The C64 memory layout is in **docs/c64-memory-map.md**.
 
 The state-machine design is in **docs/c64-state-machine.md**.
+
+The frame/update contract is in **docs/c64-frame-update-flow.md**.
+
+The river architecture is in **docs/c64-river-engine.md**.
+
+The object/collision architecture is in **docs/c64-object-and-collision-system.md**.
 
 The implementation work is tracked in the GitHub issue for the gameplay-engine rewrite.
 
