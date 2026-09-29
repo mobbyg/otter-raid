@@ -82,13 +82,13 @@ random_no_xor:
         rts
 
 clamp_center:
-        cmp #8
+        cmp #15
         bcs center_low_ok
-        lda #8
+        lda #15
 center_low_ok:
-        cmp #32
+        cmp #36
         bcc center_done
-        lda #31
+        lda #35
 center_done:
         rts
 
