@@ -188,6 +188,8 @@ The rewrite's build path is being standardized around VASM.
 
     make
 
-The Makefile invokes `vasm6502_mot` and produces `otter_raid.prg`.
+The Makefile invokes `vasm6502_mot` and produces the testable `build/otter_raid.prg` by default. Use `make run` to launch that PRG in VICE when `x64sc` is installed.
+
+The raw `build/otter_raid.bin` is also available with `make bin`, but the PRG is the normal C64/VICE test artifact. See **docs/c64-build.md** for the complete workflow.
 
 <hr>
