@@ -18,7 +18,7 @@ VASM ?= vasm6502_mot
 VASMFLAGS ?= -Fbin
 VICE ?= x64sc
 
-SRC ?= c64/otter_raid_c64.asm
+SRC ?= c64/river_prototype.asm
 BUILD_DIR ?= build
 BIN ?= $(BUILD_DIR)/otter_raid.bin
 PRG ?= $(BUILD_DIR)/otter_raid.prg
