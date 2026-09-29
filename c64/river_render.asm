@@ -1,6 +1,4 @@
 ; Otter Raid river renderer prototype
-        include "constants.asm"
-
 render_river_row:
         jsr river_sample
 
