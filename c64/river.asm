@@ -1,6 +1,4 @@
 ; Otter Raid river world prototype
-        include "constants.asm"
-
 river_init:
         lda #$A5
         sta zp_seed
