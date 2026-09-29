@@ -59,12 +59,15 @@ copy_row_to_x:
         asl
         asl
         asl
+        sta zp_dst_lo
+        lda zp_tmp2
+        asl
+        asl
+        asl
         asl
         asl
         clc
-        adc zp_tmp2
-        asl
-        ; X * 40 = X * 32 + X * 8.
+        adc zp_dst_lo
         sta zp_dst_lo
         lda #0
         adc #0
