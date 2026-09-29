@@ -76,7 +76,7 @@ Each game frame should perform the gameplay systems in a deliberate order:
 13. Update sprites and HUD.
 14. Check for a state transition.
 
-The exact order can change during implementation, but it should be deliberate rather than accidental.
+The detailed frame contract is documented in **docs/c64-frame-update-flow.md**. The exact routine arrangement can change during implementation, but the logical order should remain deliberate.
 
 ## 4. Life-Loss State
 
@@ -160,11 +160,14 @@ Accepted input moves to MENU.
 
 ### MENU
 
-The menu may initially contain:
+The menu will contain at least:
 
 - Start Game
-- Controls
 - High Scores
+- Controls
+- Exit
+
+An About entry may be added later.
 
 A simple menu cursor/selection variable is sufficient.
 
@@ -188,50 +191,51 @@ Starting a completely new game initializes:
 
 This is different from LIFE_LOST, which preserves the player's accumulated score.
 
-## 8. Player State Machine
+## 8. Player State and Protection
 
-Ollie does not need a large state machine.
+Ollie does **not** use mutually exclusive NORMAL/DIVING/INVULNERABLE states.
 
-Suggested states:
+Movement is always active while the main state is PLAYING. Protection is represented by independent flags/timers.
 
-- NORMAL
-- DIVING
-- INVULNERABLE
+The player may simultaneously have:
+- speed level 1, 2, or 3
+- diving active/inactive
+- crawfish invulnerability active/inactive
 
-### NORMAL
+The effective protection rule is:
 
-Normal swimming.
+    protected = diving OR crawfish_invulnerable
 
-- Alligator collision can hurt Ollie.
-- Eagle can catch Ollie.
-- Crawfish can be collected.
+### Movement
 
-### DIVING
+Three initial discrete swimming speeds are used:
+- Speed 1 — slow
+- Speed 2 — normal
+- Speed 3 — fast
+
+Holding Up/W requests a higher speed. Holding Down/S requests a lower speed.
+
+The actual distance contribution of each speed is a tuning value.
+
+### Diving
 
 Triggered by SPACE or the joystick dive control.
 
 - Alligator collision is ignored.
 - Eagle collision is ignored.
 - First 3 seconds are free.
-- After 3 seconds, Life Points drain at 50 points per second.
+- Beyond 3 seconds, Life Points drain at approximately 50 points per second.
 
-If the player stops diving, return to NORMAL.
+Stopping the dive clears the diving flag.
 
-### INVULNERABLE
+### Crawfish protection
 
-Triggered by collecting a crawfish.
+Collecting a crawfish starts a five-second invulnerability timer.
 
 - Alligator collision is ignored.
 - Eagle collision is ignored.
-- Protection lasts 5 seconds.
 
-When the timer expires, return to NORMAL unless Ollie is still diving.
-
-### Priority rule
-
-If Ollie is both diving and has crawfish protection, both protections are active.
-
-A collision should never damage Ollie while either protection is active.
+If Ollie is both diving and crawfish-protected, either protection is sufficient to prevent damage. Protection lasts until both independent conditions have ended.
 
 ## 9. Alligator State Machine
 
@@ -486,9 +490,11 @@ If this reaches zero:
 
 ### Heart recovery
 
-After a heart has been lost, the player may regain a heart for every additional 5,000 Life Points earned, up to three hearts.
+When a heart is lost, establish:
 
-The exact implementation of the recovery threshold should be finalized during tuning.
+    recovery_target = Life Points at loss + 5,000
+
+Reaching that target restores one heart, up to three. A later heart loss establishes a new target from the Life Points held at that moment.
 
 ## 15. Distance and Home Transition
 
@@ -664,3 +670,15 @@ At any moment we should be able to answer:
 If those answers are explicit, the assembly code becomes much easier to build, debug, and change.
 
 The state machine is therefore part of the game's architecture, not just an implementation detail.
+
+## 20. Pause
+
+PAUSED is a top-level state paired with PLAYING:
+
+    PLAYING <-> PAUSED
+
+The initial pause key is **P** rather than RUN/STOP.
+
+While paused, gameplay movement, scrolling, hazards, collisions, Life Points, distance, score, and gameplay timers freeze. Music may continue playing.
+
+The PAUSED presentation can use custom characters rather than consuming a hardware sprite.
