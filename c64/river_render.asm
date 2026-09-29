@@ -53,37 +53,25 @@ render_initial_loop:
 ; Copy it to screen row X. Color RAM is copied the same way.
 copy_row_to_x:
         stx zp_tmp2
-        txa
-        asl
-        asl
-        asl
-        sta zp_dst_lo
-        lda zp_tmp2
-        asl
-        asl
-        asl
-        asl
-        asl
-        clc
-        adc zp_dst_lo
-        sta zp_dst_lo
-        lda #0
-        adc #0
-        sta zp_dst_hi
 
         lda #<SCREEN_RAM
-        clc
-        adc zp_dst_lo
         sta zp_dst_lo
         lda #>SCREEN_RAM
-        adc zp_dst_hi
         sta zp_dst_hi
+        ldx zp_tmp2
+        beq copy_screen_ready
+copy_screen_addr:
+        clc
+        lda zp_dst_lo
+        adc #40
+        sta zp_dst_lo
+        bcc copy_screen_no_carry
+        inc zp_dst_hi
+copy_screen_no_carry:
+        dex
+        bne copy_screen_addr
 
-        lda #0
-        sta zp_src_lo
-        lda #>SCREEN_RAM
-        sta zp_src_hi
-
+copy_screen_ready:
         ldy #0
 copy_screen_row:
         lda SCREEN_RAM,y
@@ -93,12 +81,23 @@ copy_screen_row:
         bne copy_screen_row
 
         lda #<COLOR_RAM
-        clc
-        adc zp_dst_lo
         sta zp_dst_lo
         lda #>COLOR_RAM
-        adc zp_dst_hi
         sta zp_dst_hi
+        ldx zp_tmp2
+        beq copy_color_ready
+copy_color_addr:
+        clc
+        lda zp_dst_lo
+        adc #40
+        sta zp_dst_lo
+        bcc copy_color_no_carry
+        inc zp_dst_hi
+copy_color_no_carry:
+        dex
+        bne copy_color_addr
+
+copy_color_ready:
         ldy #0
 copy_color_row:
         lda COLOR_RAM,y
