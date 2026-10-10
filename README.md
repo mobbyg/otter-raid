@@ -7,6 +7,12 @@ You are **Ollie Otter**, swimming upstream to get home for Auntie's birthday par
 
 The goal is not to survive forever. **Get Ollie home.**
 
+## Screenshots
+
+| Title | On the river | Home at last |
+|:---:|:---:|:---:|
+| ![Title screen with the Otter Raid logo, Ollie holding the present and the main menu](docs/screenshots/title.png) | ![Ollie swimming upstream between tree-lined banks, with the HUD showing score, Life Points, hearts, gifts and journey progress](docs/screenshots/in_game.png) | ![The homecoming: Auntie's house and dock, Ollie, Auntie and the present dancing under balloons and fireworks](docs/screenshots/home.png) |
+
 ## Game Flow
 
 1. Start at the bottom of the river with **1,000 Life Points and 3 hearts**.
