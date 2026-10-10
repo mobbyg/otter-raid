@@ -5,46 +5,45 @@
 #
 # Useful targets:
 #   make prg       Build build/otter_raid.prg for VICE/C64
-#   make bin       Build build/otter_raid.bin (raw assembled bytes)
 #   make run       Build and launch with VICE (x64sc)
-#   make clean     Remove build output
+#   make assets    Regenerate graphics data from gfx/ sources (needs python3)
+#   make clean     Remove the PRG and listing (keeps previews)
 #
 # Override tools/paths as needed:
-#   make VASM=/path/to/vasm6502_mot
+#   make VASM=/path/to/vasm6502_oldstyle
 #   make VICE=/path/to/x64sc
-#   make SRC=c64/my_test.asm
 
-VASM ?= vasm6502_mot
-VASMFLAGS ?= -Fbin
+VASM ?= vasm6502_oldstyle
+VASMFLAGS ?= -Fbin -cbm-prg -dotdir -quiet
 VICE ?= x64sc
+PYTHON ?= python3
 
-SRC ?= c64/river_prototype.asm
+SRC ?= c64/main.asm
 BUILD_DIR ?= build
-BIN ?= $(BUILD_DIR)/otter_raid.bin
 PRG ?= $(BUILD_DIR)/otter_raid.prg
+LIST ?= $(BUILD_DIR)/otter_raid.lst
 
-.PHONY: all prg bin run clean
+# Every assembler source can be pulled in through includes.
+ASM_DEPS := $(wildcard c64/*.asm c64/*/*.asm)
+
+.PHONY: all prg run assets clean
 
 all: prg
 
 prg: $(PRG)
 
-bin: $(BIN)
-
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-$(BIN): $(SRC) | $(BUILD_DIR)
-	$(VASM) $(VASMFLAGS) -o $@ $<
-
-# C64 PRG files begin with the two-byte load address.
-# The current source is assembled for $0801.
-$(PRG): $(BIN)
-	printf '\001\010' > $@
-	cat $< >> $@
+# vasm writes the two-byte PRG load address itself (-cbm-prg).
+$(PRG): $(ASM_DEPS) | $(BUILD_DIR)
+	$(VASM) $(VASMFLAGS) -L $(LIST) -o $@ $(SRC)
 
 run: $(PRG)
-	$(VICE) $(PRG)
+	$(VICE) -autostart $(PRG)
+
+assets:
+	$(PYTHON) tools/gfx.py
 
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -f $(PRG) $(LIST)
