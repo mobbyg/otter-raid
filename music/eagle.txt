@@ -1,0 +1,27 @@
+# Otter Raid - eagle attack.  E phrygian, 150 bpm (5 frames per 16th).
+# One bar sting, then a 4 bar loop that repeats until the game
+# calls music_play again (normally MUS_RIVER when the eagle leaves).
+# Voice 3 (expendable) only adds stabs and hats.
+
+tune EAGLE
+tempo 5
+
+pat sting1
+  @crash c4 @bass o2 e4. e4. |
+pat sting2
+  @brass o5 b8 a+8 a8 g+8 g2 |
+pat sting3
+  @arpdim o4 e4. e4. e4 |
+
+# loop: phrygian ostinato with snare, written on E
+pat ebass
+  @bass o2 e16 e16 f16 e16 @snare c8 @bass e16 g16 e16 e16 f16 e16
+  @snare c8 @bass b-16 a16 |
+pat etrill
+  @trill o5 b1 | b1 | o6 c1 | o5 b2 g2 |
+pat estab
+  @arpdim o4 r8 e8 @hat c8 @arpdim e8 r8 e8 @hat c8 @arpdim e8 |
+
+v1: sting1 LOOP ebass ebass ebass+1 ebass
+v2: sting2 LOOP etrill
+v3: sting3 LOOP estab estab estab+1 estab

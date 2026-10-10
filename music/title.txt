@@ -1,0 +1,89 @@
+# Otter Raid - title theme.  C major, 125 bpm (6 frames per 16th).
+# Voice 1 bass + snare, voice 2 lead, voice 3 chord arpeggios.
+# 4 bar intro, then a 32 bar loop: A, A2 (snare groove, brighter
+# lead), B bridge (filtered bass, saw lead), C solo.
+
+tune TITLE
+tempo 6
+
+# ----- bass (written on C, transposed by the order lists) -----
+pat bassL
+  @bass o2 c8 > c8 < c16 c16 > c8 < c8 > c8 < g8 > c8 |
+pat bassLh
+  @bass o2 c8 > c8 < c16 c16 > c8
+pat bassS
+  @bass o2 c8 > c16 < c16 @snare c8 @bass c16 > c16 < c8 > c16 < c16
+  @snare c8 @bass > c16 < c16 |
+pat bassSh
+  @bass o2 c8 > c16 < c16 @snare c8 @bass c16 > c16
+pat bassF
+  @bassf o2 c8 > c16 < c16 @snare c8 @bassf c16 > c16 < c8 > c16 < c16
+  @snare c8 @bassf > c16 < c16 |
+pat bassFh
+  @bassf o2 c8 > c16 < c16 @snare c8 @bassf c16 > c16
+
+# ----- chords: 3-3-2 rhythm, root C4 -----
+pat arpM
+  @arpmaj o4 c8. c8. c8 c8. c8. c8 |
+pat arpm
+  @arpmin o4 c8. c8. c8 c8. c8. c8 |
+pat arpMh
+  @arpmaj o4 c8. c8. c8
+pat arpmh
+  @arpmin o4 c8. c8. c8
+
+# ----- lead -----
+pat intro
+  r1 | r1 | r1 | r2 @lead o4 g8 a8 b8 > d8 |
+
+# A theme, bars 1-7 (instrument chosen in the order list)
+pat melA
+  o4 g8 > c8 e8. d16 c8 e8 g4 |
+  o5 a4 g8 e8 c8. d16 e4 |
+  o5 f8. e16 d8 c8 o4 a4 > c4 |
+  o5 d8 g8 f8 e8 d4 o4 b4 |
+  o4 g8 > c8 e8. d16 c8 e8 g4 |
+  o6 c4 o5 b8 a8 e8. a16 o6 c4 |
+  o5 a4 g8 f8 g8 a8 b8 o6 d8 |
+pat endA1
+  o6 c4. o5 g16 a16 g8 e8 d8 c8 |
+pat endA2
+  o6 c2 r2 |
+
+# B bridge: Am F C G Am F Dm-G G
+pat melB
+  o4 a4. b8 > c4 e4 |
+  o5 f4. e8 d4 c4 |
+  o5 e4. d8 c4 o4 g4 |
+  o4 b4. a8 g4 b4 |
+  o5 c4. d8 e4 a4 |
+  o5 a4. g8 f4 c4 |
+  o5 d4 f4 g4 b4 |
+  o6 d2. r4 |
+
+# C solo over the A chords
+pat solo
+  o6 c16 o5 g16 e16 g16 o6 c16 e16 g16 e16 c8 o5 g8 e8 g8 |
+  o5 a16 e16 c16 e16 a16 o6 c16 e16 c16 o5 a8 e8 c8 e8 |
+  o5 f16 c16 o4 a16 o5 c16 f16 a16 o6 c16 o5 a16 f8 c8 o4 a8 o5 c8 |
+  o5 g16 d16 o4 b16 o5 d16 g16 b16 o6 d16 o5 b16 g8 f8 e8 d8 |
+  o5 e4. g8 o6 c4 o5 g4 |
+  o5 a4. o6 c8 e4 c4 |
+  o5 f4 a8 o6 c8 o5 b4 o6 d8 o5 b8 |
+  o6 c2 r4 o5 g4 |
+
+# ----- order lists -----
+v1: bassL bassL bassL+5 bassL+7 LOOP
+v1: bassL bassL+9 bassL+5 bassL+7 bassL bassL+9 bassLh+5 bassLh+7 bassL
+v1: bassS bassS+9 bassS+5 bassS+7 bassS bassS+9 bassSh+5 bassSh+7 bassS
+v1: bassF+9 bassF+5 bassF bassF+7 bassF+9 bassF+5 bassFh+2 bassFh+7 bassF+7
+v1: bassS bassS+9 bassS+5 bassS+7 bassS bassS+9 bassSh+5 bassSh+7 bassS
+
+v2: intro LOOP
+v2: @lead melA endA1 @leadhi melA endA2 @brass melB @lead solo
+
+v3: arpM arpM arpM-7 arpM-5 LOOP
+v3: arpM arpm-3 arpM-7 arpM-5 arpM arpm-3 arpMh-7 arpMh-5 arpM
+v3: arpM arpm-3 arpM-7 arpM-5 arpM arpm-3 arpMh-7 arpMh-5 arpM
+v3: arpm-3 arpM-7 arpM arpM-5 arpm-3 arpM-7 arpmh+2 arpMh-5 arpM-5
+v3: arpM arpm-3 arpM-7 arpM-5 arpM arpm-3 arpMh-7 arpMh-5 arpM

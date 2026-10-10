@@ -1,0 +1,200 @@
+# Otter Raid instruments (shared by all tunes).  See docs/c64-sound.md.
+#
+# inst NAME
+#   adsr A D S R          envelope nibbles (hex)
+#   wave WW:N ...         wave program, one entry per frame
+#                         WW = control byte in hex without gate
+#                         (11 tri, 21 saw, 41 pulse, 81 noise, 08 test,
+#                         -- keep), N = +k/-k semitones relative to
+#                         the note or =NOTE absolute (drums).
+#                         '/' marks the loop start, else the last
+#                         entry is held.
+#   pulse START SPD MIN MAX   12-bit start, signed change per frame,
+#                         ping-pong between MIN and MAX (high byte)
+#   vib DELAY SPEED DEPTH vibrato after DELAY frames, SPEED frames
+#                         per quarter wave, step = semitone >> DEPTH
+#   filter NAME           start this filter program on every note
+#   keeppw                keep the pulse sweep running across notes
+# end
+#
+# filter NAME
+#   mode lp|bp|hp[+..]    res 0-15
+#   cut START LIMIT SPEED cutoff high byte sweep, signed per frame
+# end
+#
+# Filter cutoffs stay inside $18-$90 so 6581 and 8580 both sound
+# reasonable; the filter is only used on voices 1 and 2.
+
+# ===== leads =====
+
+inst lead
+  adsr 0 9 a 9
+  wave 41:0
+  pulse $600 24 3 $c
+  vib 14 2 3
+  keeppw
+end
+
+inst leadhi                # brighter lead with octave chirp attack
+  adsr 0 9 a 9
+  wave 41:+12 41:0
+  pulse $400 32 2 $b
+  vib 12 2 3
+  keeppw
+end
+
+inst echo                  # quiet copy of the lead for echo/harmony
+  adsr 0 9 6 8
+  wave 41:0
+  pulse $900 -20 3 $c
+  vib 14 2 3
+  keeppw
+end
+
+inst flute                 # soft triangle lead
+  adsr 1 8 a 9
+  wave 11:0
+  vib 10 2 3
+end
+
+inst brass                 # sawtooth fanfare voice
+  adsr 1 9 b 9
+  wave 21:0
+  vib 10 2 3
+end
+
+inst sadlead               # slow vibrato triangle for sad jingles
+  adsr 0 a 9 a
+  wave 11:0
+  vib 8 3 3
+end
+
+inst bell                  # plucked triangle with octave ping
+  adsr 0 9 0 9
+  wave 41:+12 11:+12 11:0
+  pulse $200 0 1 $e
+end
+
+inst trill                 # tense semitone trill for the eagle
+  adsr 0 8 a 8
+  wave 41:0 41:0 41:+1 41:+1 / 41:0 41:0 41:+1 41:+1
+  pulse $300 40 2 $9
+  keeppw
+end
+
+# ===== bass =====
+
+inst bass                  # plucky pulse bass, noise click attack
+  adsr 0 9 7 9
+  wave 81:=c6 41:0
+  pulse $300 32 2 $8
+  keeppw
+end
+
+inst bassf                 # filtered saw bass with a cutoff sweep
+  adsr 0 9 8 9
+  wave 81:=c6 21:0
+  filter fbass
+end
+
+inst basssoft              # round triangle bass
+  adsr 0 9 9 9
+  wave 11:0
+end
+
+# ===== chord arpeggios (1 frame per step) =====
+
+inst arpmaj
+  adsr 0 8 6 8
+  wave / 41:0 41:+4 41:+7
+  pulse $500 48 2 $a
+  keeppw
+end
+
+inst arpmin
+  adsr 0 8 6 8
+  wave / 41:0 41:+3 41:+7
+  pulse $500 48 2 $a
+  keeppw
+end
+
+inst arpsus
+  adsr 0 8 6 8
+  wave / 41:0 41:+5 41:+7
+  pulse $500 48 2 $a
+  keeppw
+end
+
+inst arpdom7
+  adsr 0 8 6 8
+  wave / 41:0 41:+4 41:+7 41:+10
+  pulse $500 48 2 $a
+  keeppw
+end
+
+inst arpdim
+  adsr 0 8 6 8
+  wave / 41:0 41:+3 41:+6
+  pulse $500 48 2 $a
+  keeppw
+end
+
+inst arpmaj6               # 0 4 9: major sixth colour
+  adsr 0 8 6 8
+  wave / 41:0 41:+4 41:+9
+  pulse $500 48 2 $a
+  keeppw
+end
+
+inst arpslow               # gentle two-frame major arpeggio
+  adsr 0 9 5 9
+  wave / 11:0 11:0 11:+4 11:+4 11:+7 11:+7 11:+12 11:+12
+end
+
+inst arpslowm              # gentle two-frame minor arpeggio
+  adsr 0 9 5 9
+  wave / 11:0 11:0 11:+3 11:+3 11:+7 11:+7 11:+12 11:+12
+end
+
+# ===== drums (absolute pitches, the pattern note is ignored) =====
+
+inst kick
+  adsr 0 7 0 0
+  wave 81:=a6 41:=c4 41:=g3 41:=d#3 41:=c3 41:=a2 41:=g2 41:=e2
+  pulse $800 0 1 $e
+end
+
+inst snare
+  adsr 0 8 0 0
+  wave 81:=c#7 41:=g4 41:=d#4 81:=a#6 81:=g#6 81:=f#6 81:=e6
+  pulse $800 0 1 $e
+end
+
+inst hat
+  adsr 0 2 0 0
+  wave 81:=a#7
+end
+
+inst ohat
+  adsr 0 6 0 0
+  wave 81:=a#7 81:=g#7
+end
+
+inst tom
+  adsr 0 8 0 0
+  wave 81:=f6 41:=a3 41:=f3 41:=d3 41:=b2 41:=a2 41:=g2
+  pulse $800 0 1 $e
+end
+
+inst crash
+  adsr 0 b 0 0
+  wave 81:=a#7 81:=f#7 81:=d#7
+end
+
+# ===== filters =====
+
+filter fbass
+  mode lp
+  res 6
+  cut $70 $1c -3
+end

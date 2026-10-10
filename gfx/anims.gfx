@@ -1,0 +1,20 @@
+; Otter Raid -- preview-only animation list (build/gfx_preview/anim_*.gif)
+; Not used by the engine.  @anim NAME frames=A,B,.. delay=ms bg=water|
+; land|black|sky expand=0|1
+
+@anim ollie_swim frames=OLLIE_SWIM0,OLLIE_SWIM1,OLLIE_SWIM2,OLLIE_SWIM3 delay=110
+@anim ollie_steer frames=OLLIE_LEFT,OLLIE_SWIM1,OLLIE_RIGHT,OLLIE_SWIM3 delay=300
+@anim ollie_dive frames=OLLIE_SWIM1,OLLIE_DIVE0,OLLIE_DIVE1,OLLIE_DIVE2,OLLIE_UNDER0,OLLIE_UNDER1,OLLIE_UNDER0,OLLIE_UNDER1 delay=160
+@anim ollie_hurt frames=OLLIE_HURT,OLLIE_SWIM1 delay=90
+@anim gator_right frames=GATOR_R0,GATOR_R1,GATOR_R2,GATOR_R1 delay=140
+@anim gator_left frames=GATOR_L0,GATOR_L1,GATOR_L2,GATOR_L1 delay=140
+@anim gator_attack frames=GATOR_LURK_R,GATOR_LURK_R,GATOR_R1,GATOR_BITE_R,GATOR_R1,GATOR_BITE_R delay=200
+@anim eagle_flap frames=EAGLE0,EAGLE1,EAGLE2,EAGLE3 delay=110 expand=1
+@anim eagle_shadow frames=EAGLE_SHADOW0,EAGLE_SHADOW0,EAGLE_SHADOW1,EAGLE_SHADOW0 delay=110 bg=land expand=1
+@anim eagle_carry frames=EAGLE_CARRY,EAGLE_DIVE delay=250 bg=land expand=1
+@anim splash frames=SPLASH0,SPLASH1,SPLASH2 delay=120
+@anim bubbles frames=BUBBLES0,BUBBLES1 delay=200
+@anim sparkle frames=SPARKLE0,SPARKLE1,SPARKLE2,SPARKLE3 delay=100
+@anim auntie_dance frames=AUNTIE0,AUNTIE1 delay=300 bg=black
+@anim ollie_dance frames=OLLIE_FRONT0,OLLIE_FRONT1 delay=300 bg=black
+@anim firework frames=FIREWORK0,FIREWORK1,FIREWORK2,FIREWORK3 delay=150 bg=black

@@ -1,0 +1,47 @@
+# Otter Raid - home: Auntie's birthday party.  C major, 3/4,
+# 107 bpm (7 frames per 16th).
+# 2 bar brass fanfare, then "Happy Birthday to You" (public domain
+# melody) as a festive waltz with a 2 bar party tag. The tag ends on
+# the "Hap-py" pickup and the tune loops back into the verse
+# (first pass 20 s, then a 16.8 s loop) until the game moves on.
+
+tune HOME
+tempo 7
+bar 12
+
+# ----- fanfare (2 bars), ends with the first "Hap-py" -----
+pat fanmel
+  @brass o4 g8. g16 > c4 e4 | g2 < g8. g16 |
+pat fanharm
+  @brass o4 e8. e16 g4 > c4 | e2 r4 |
+pat fanbass
+  @bass o2 c4 c4 c4 | @tom c8 c8 c8 c8 @snare c8 c8 |
+
+# ----- the song, 8 bars: C G G C C7 F C-G7 C -----
+pat hbmel
+  o4 a4 g4 > c4 | < b2 g8. g16 | a4 g4 > d4 | c2 < g8. g16 |
+  > g4 e4 c4 | < b4 a4 > f8. f16 | e4 c4 d4 | c2. |
+pat wbass
+  @bass o2 c4 r4 g4 |
+pat wstab
+  @arpmaj o4 r4 c4 c4 |
+pat wstab7
+  @arpdom7 o4 r4 c4 c4 |
+pat wstabcg
+  @arpmaj o4 r4 c4 @arpdom7 o3 g4 |
+
+# ----- party tag (2 bars), ends with the next "Hap-py" -----
+pat tagmel
+  o5 f8 a8 o6 c8 o5 a8 f8 a8 | o5 g8 b8 o6 c4 o4 g8. g16 |
+pat tagbass
+  @bass o2 f4 > c4 < f4 | @snare c8 c8 @bass o2 c4 @kick c4 |
+pat tagstab
+  @arpmaj o3 f8 f8 r8 f8 f8 r8 | @arpdom7 o3 g8 g8 @arpmaj o4 c4 r4 |
+
+v1: fanbass LOOP
+v1: wbass wbass+7 wbass+7 wbass wbass wbass+5 wbass wbass tagbass
+
+v2: fanmel LOOP @brass hbmel @leadhi tagmel
+
+v3: fanharm LOOP
+v3: wstab wstab-5 wstab-5 wstab wstab7 wstab-7 wstabcg wstab tagstab
