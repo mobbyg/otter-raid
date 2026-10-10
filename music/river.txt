@@ -1,0 +1,92 @@
+# Otter Raid - in-game river theme.  A minor, 125 bpm.
+# Voice 1 driving bass + snare, voice 2 lead, voice 3 hi-hats and
+# chord stabs. Voice 3 is pure colour: sound effects steal it and
+# the tune still works on voices 1 and 2.
+# 2 bar intro, then a 40 bar loop: A, B, A', C breakdown, D solo.
+
+tune RIVER
+tempo 6
+
+# ----- bass (written on A) -----
+pat rbass
+  @bass o2 a16 a16 > a16 < a16 @snare c8 @bass a16 > a16 < a16 a16 > a16
+  < a16 @snare c8 @bass > a16 < a16 |
+pat rbassh
+  @bass o2 a16 a16 > a16 < a16 @snare c8 @bass a16 > a16
+pat rbassL
+  @basssoft o2 a8 a8 > a8 < a8 a8 a8 > a8 < a8 |
+
+# ----- voice 3: hats + offbeat stabs, or 3-3-2 chords (root A3) ---
+pat rarpm
+  @hat c8 @arpmin o3 a8 @hat c8 @arpmin a8 @hat c8 @arpmin a8
+  @hat c8 @arpmin a8 |
+pat rarpM
+  @hat c8 @arpmaj o3 a8 @hat c8 @arpmaj a8 @hat c8 @arpmaj a8
+  @hat c8 @arpmaj a8 |
+pat rarpMh
+  @hat c8 @arpmaj o3 a8 @hat c8 @arpmaj a8
+pat rarp2m
+  @arpmin o3 a8. a8. a8 a8. a8. a8 |
+pat rarp2M
+  @arpmaj o3 a8. a8. a8 a8. a8. a8 |
+
+# ----- lead -----
+pat introR
+  r1 | r2 r8 @lead o4 e8 g+8 b8 |
+
+# A: Am Am F G Am Am F G-E
+pat melRA
+  o4 a4 o5 e4. d8 c8 o4 b8 |
+  o5 c4. o4 a8 a2 |
+  o4 a4 o5 c4. d8 e4 |
+  o5 d4. c8 o4 b4 g4 |
+  o4 a4 o5 e4. g8 a4 |
+  o5 g8 e8 d8 e8 c4 o4 a4 |
+  o5 f4. e8 d4 c4 |
+  o5 d4 o4 b4 g+4 b4 |
+
+# B: C G Dm Am C G F E
+pat melRB
+  o5 c8 d8 e8 g8 e4 c4 |
+  o5 d8 e8 d8 o4 b8 g4 b4 |
+  o4 a8 o5 d8 f8 a8 g4 f4 |
+  o5 e4. d8 c4 o4 a4 |
+  o5 c8 d8 e8 g8 o6 c4 o5 g4 |
+  o5 a8 g8 f8 e8 d4 o4 b4 |
+  o5 c4. o4 a8 f4 a4 |
+  o4 g+4 b4 o5 e4 d4 |
+
+# C breakdown pad: Am F C G Am F E E
+pat padRC
+  o5 e1 | f1 | e1 | d1 | c1 | c1 | o4 b1 | g+1 |
+
+# D solo over the A chords
+pat soloR
+  o4 a16 o5 c16 e16 a16 g16 e16 c16 e16 d16 c16 o4 b16 a16 g16 a16
+  b16 o5 c16 |
+  o5 e16 d16 c16 o4 b16 a16 b16 o5 c16 d16 e8 a8 e8 c8 |
+  o5 c16 o4 a16 f16 a16 o5 c16 f16 a16 f16 e16 d16 c16 d16 e8 c8 |
+  o5 d16 o4 b16 g16 b16 o5 d16 g16 b16 g16 f16 e16 d16 e16 f8 d8 |
+  o5 e8 a8 o6 c8 o5 a8 e8 a8 o6 c8 e8 |
+  o6 d8 c8 o5 b8 a8 g8 e8 d8 e8 |
+  o5 f16 e16 f16 a16 o6 c8 o5 a8 f16 e16 f16 a16 o6 c8 o5 a8 |
+  o5 b8 g8 d8 o4 b8 g+8 b8 o5 e8 g+8 |
+
+# ----- order lists -----
+v1: rbass rbass LOOP
+v1: rbass rbass rbass-4 rbass-2 rbass rbass rbass-4 rbassh-2 rbassh-5
+v1: rbass+3 rbass-2 rbass-7 rbass rbass+3 rbass-2 rbass-4 rbass-5
+v1: rbass rbass rbass-4 rbass-2 rbass rbass rbass-4 rbassh-2 rbassh-5
+v1: rbassL rbassL-4 rbassL+3 rbassL-2 rbassL rbassL-4 rbassL-5 rbassL-5
+v1: rbass rbass rbass-4 rbass-2 rbass rbass rbass-4 rbassh-2 rbassh-5
+
+v2: introR LOOP
+v2: @lead melRA @lead melRB @leadhi melRA @flute padRC @lead soloR
+
+v3: rarpm rarpm LOOP
+v3: rarpm rarpm rarpM-4 rarpM-2 rarpm rarpm rarpM-4 rarpMh-2 rarpMh-5
+v3: rarp2M+3 rarp2M-2 rarp2m-7 rarp2m rarp2M+3 rarp2M-2 rarp2M-4
+v3: rarp2M-5
+v3: rarpm rarpm rarpM-4 rarpM-2 rarpm rarpm rarpM-4 rarpMh-2 rarpMh-5
+v3: rarp2m rarp2M-4 rarp2M+3 rarp2M-2 rarp2m rarp2M-4 rarp2M-5 rarp2M-5
+v3: rarpm rarpm rarpM-4 rarpM-2 rarpm rarpm rarpM-4 rarpMh-2 rarpMh-5

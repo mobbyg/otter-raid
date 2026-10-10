@@ -1,0 +1,36 @@
+# Otter Raid - high score / name entry.  F major, 94 bpm (8 frames
+# per 16th), gentle 8 bar loop (20.5 s): flute melody, rolling soft
+# bass, slow triangle arpeggios.
+
+tune HIGH_SCORE
+tempo 8
+
+pat hsmel
+  @flute o4 a4. g8 f4 a4 |
+  o5 d4. c8 o4 a4 f4 |
+  o4 g4. a8 b-4 o5 d4 |
+  o5 c2 o4 g4 e4 |
+  o4 f4. g8 a4 o5 c4 |
+  o5 d4. e8 f4 d4 |
+  o4 b-4 o5 d4 c4 o4 b-4 |
+  o4 a2. r4 |
+
+# written on F
+pat hsb
+  @basssoft o2 f4 > c4 f4 c4 |
+pat hsbh
+  @basssoft o2 f4 > c4
+pat hsarpM
+  @arpslow o3 f2 f2 |
+pat hsarpm
+  @arpslowm o3 f2 f2 |
+pat hsarpmh
+  @arpslowm o3 f2
+pat hsarpMh
+  @arpslow o3 f2
+
+# F Dm Bb C F Dm Gm-C F
+v1: LOOP hsb hsb-3 hsb-7 hsb-5 hsb hsb-3 hsbh+2 hsbh-5 hsb
+v2: LOOP hsmel
+v3: LOOP hsarpM hsarpm-3 hsarpM-7 hsarpM-5 hsarpM hsarpm-3 hsarpmh+2
+v3: hsarpMh-5 hsarpM

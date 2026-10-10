@@ -1,0 +1,16 @@
+# Otter Raid - a heart is lost.  ~3 s, plays once, ends silent.
+# A drooping "wah wah wah waaah" over a chromatic bass, A minor end.
+
+tune LIFE_LOST
+tempo 6
+
+pat llmel
+  @brass o4 g4 f+4 f4 s-1,60 e2.
+pat llbass
+  @basssoft o3 c4 o2 b4 b-4 a2.
+pat llchord
+  r4 r4 r4 @arpslowm o3 a2.
+
+v1: llbass
+v2: llmel
+v3: llchord

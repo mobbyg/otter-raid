@@ -1,0 +1,259 @@
+# Otter Raid sound effects (all play on SID voice 3).
+# See docs/c64-sound.md.  Numbers come from c64/sound/sound_ids.asm.
+#
+# sfx NAME prio N        higher priority wins, equal restarts
+#   setup A D S R PW PWSPD CTRL   envelope, pulse width, pulse change
+#                        per frame and control in one command
+#   adsr A D S R         envelope (hex nibbles)
+#   ctrl XX              control register incl. gate bit (41 = pulse
+#                        on, 40 = pulse released, 81 noise, 11 tri...)
+#   pw $XXX              pulse width      pwspd N  pulse change/frame
+#   note NOTE [WAIT]     pitch from the note table, optional wait
+#                        (a ctrl right before it is merged into it)
+#   freq $XXXX           raw frequency    slide N  raw change/frame
+#   sweep N1 N2 FRAMES [keep]   glide N1 -> N2, waits FRAMES; the
+#                        slide stops afterwards unless 'keep'
+#   wait N               frames
+#   loop N ... next      repeat a block (must contain a wait)
+# end
+#
+# Every effect starts after a one-frame hard restart of voice 3.
+# Keep the commands between two waits few: they all run in one
+# frame (cycle budget, see docs/c64-sound.md).
+
+# ----- menus -----
+
+sfx MENU_MOVE prio 1
+  setup 0 0 a 4 $600 0 41
+  note e6 2
+  note b6 2
+  ctrl 40
+  wait 5
+end
+
+sfx MENU_SELECT prio 3
+  setup 0 0 c 8 $800 64 41
+  note c6 2
+  note e6 2
+  note g6 2
+  note c7 3
+  note g6 2
+  note c7 6
+  ctrl 40
+  wait 14
+end
+
+# ----- swimming -----
+
+sfx SPLASH_DIVE prio 3
+  setup 0 9 0 0 $800 0 81
+  sweep a#7 d6 10
+  setup 0 6 0 0 $800 0 11
+  sweep c5 g3 8
+  ctrl 10
+  wait 6
+end
+
+sfx SURFACE prio 2
+  setup 0 0 8 4 $800 0 11
+  sweep g3 d5 6
+  sweep d4 a5 6
+  ctrl 81
+  note f7 2
+  ctrl 80
+  wait 5
+end
+
+sfx BANK_BUMP prio 1
+  setup 0 5 0 0 $800 0 81
+  note d6 1
+  ctrl 41
+  sweep e3 a1 7
+  ctrl 40
+  wait 3
+end
+
+sfx GATOR_SPLASH prio 2
+  setup 0 7 0 0 $800 0 81
+  sweep g7 c#6 12
+  ctrl 80
+  wait 4
+end
+
+# ----- danger -----
+
+sfx GATOR_CHOMP prio 6
+  setup 0 0 c 2 $400 0 81
+  loop 2
+    ctrl 81
+    note a#7 1
+    note a6 1
+    ctrl 21
+    sweep a3 c#2 5
+    ctrl 20
+    wait 3
+  next
+  setup 0 8 0 0 $400 0 81
+  sweep e6 f5 8
+  ctrl 80
+  wait 2
+end
+
+sfx HURT prio 6
+  setup 0 0 c 6 $800 -80 41
+  note b5 2
+  ctrl 81
+  note c7 1
+  ctrl 41
+  sweep a5 c4 10 keep
+  slide -40
+  wait 8
+  slide 0
+  ctrl 40
+  wait 10
+end
+
+sfx EAGLE_SCREECH prio 6
+  setup 1 0 e 8 $180 24 41
+  sweep d6 a6 5 keep
+  loop 5
+    slide 260
+    wait 2
+    slide -260
+    wait 2
+  next
+  sweep a6 c6 4 keep
+  ctrl 81
+  wait 1
+  ctrl 41
+  sweep b6 e5 18
+  ctrl 40
+  wait 12
+end
+
+sfx EAGLE_SWOOP prio 4
+  setup 9 0 f a $800 0 81
+  sweep c4 a#6 28
+  ctrl 80
+  sweep a#6 d4 30
+end
+
+sfx EAGLE_CATCH prio 8
+  setup 0 0 f a $200 48 41
+  loop 4
+    note f6 2
+    note b6 2
+  next
+  ctrl 81
+  sweep a#7 a6 6
+  ctrl 21
+  sweep c6 c3 30 keep
+  ctrl 20
+  wait 24
+end
+
+# ----- rewards -----
+
+sfx CRAWFISH_PICKUP prio 5
+  setup 0 0 d 9 $300 96 41
+  note c6 1
+  note e6 1
+  note g6 1
+  note c7 1
+  note e6 1
+  note g6 1
+  note c7 1
+  note e7 1
+  note g6 1
+  note c7 1
+  note e7 1
+  note g7 1
+  note c7 1
+  note e7 1
+  note g7 1
+  note a#7 3
+  ctrl 40
+  loop 3
+    note e7 1
+    note g7 1
+  next
+  wait 18
+end
+
+sfx INVULN_ENDING prio 3
+  setup 0 0 a 3 $300 0 40
+  loop 3
+    ctrl 41
+    note a6 4
+    ctrl 40
+    wait 3
+    ctrl 41
+    note e6 4
+    ctrl 40
+    wait 6
+  next
+end
+
+sfx HEART_GAINED prio 7
+  setup 0 0 c 8 $500 40 41
+  note g5 4
+  note c6 4
+  note e6 4
+  note g6 4
+  ctrl 40
+  wait 1
+  ctrl 41
+  note e6 3
+  ctrl 40
+  wait 1
+  ctrl 41
+  note g6 3
+  ctrl 40
+  wait 1
+  ctrl 41
+  note c7 20
+  ctrl 40
+  wait 20
+end
+
+sfx FISH_EAT prio 5
+  setup 0 0 a 3 $600 0 81
+  note d7 1
+  ctrl 41
+  sweep e4 a3 3
+  ctrl 81
+  note c7 1
+  ctrl 41
+  sweep d4 g3 3
+  ctrl 11
+  sweep c4 g4 4
+  ctrl 41
+  sweep c6 g6 4
+  ctrl 40
+  wait 4
+end
+
+sfx GIFT prio 6
+  setup 0 0 f 9 $800 0 11
+  note d7 1
+  note d6 3
+  note f#7 1
+  note f#6 3
+  note a7 1
+  note a6 3
+  note d7 6
+  loop 4
+    note a7 1
+    note d7 2
+  next
+  ctrl 10
+  wait 10
+end
+
+sfx MILESTONE prio 2
+  setup 0 a 0 0 $800 0 11
+  note g6 3
+  note d7 22
+  ctrl 10
+  wait 2
+end
