@@ -205,4 +205,10 @@ The build uses VASM (`vasm6502_oldstyle`).
 
 The PRG loads at `$0801` and starts itself with `SYS 2061`. `tools/vicetest.py` drives VICE headlessly (Xvfb plus the remote monitor) for automated checks: breakpoints, screenshots, memory reads and an input-override hook. See **docs/c64-build.md** for the complete workflow.
 
+## License
+
+Otter Raid is released under the [MIT License](LICENSE). You may use, modify, redistribute, and sell copies of the software, provided the license and copyright notice are included. See the license for its terms.
+
+The MIT license applies to the project files unless a file or asset carries a separate notice. Third-party assets, names, and trademarks remain subject to their respective rights.
+
 <hr>
