@@ -145,9 +145,10 @@ Details: `docs/c64-object-and-collision-system.md`.
 | 320+ | FIRE/RETURN leaves (intended: `HOME_LEAVE_MIN`) |
 | 512 | leaves automatically (`home_t_hi >= 2`) |
 
-Known issue: the early-leave test compares only the low byte of
-`HOME_LEAVE_MIN`, so FIRE is accepted from frame 110 and can skip the
-tally.
+The early-leave test compares the full 16-bit home timer against
+`HOME_LEAVE_MIN`, so FIRE/RETURN is accepted only after the minimum
+show-and-tally interval. The sequence leaves automatically once
+`home_t_hi` reaches 2 (512 frames).
 
 ## High scores
 
