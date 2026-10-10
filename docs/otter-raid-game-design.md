@@ -66,7 +66,7 @@ The initial alligator damage target is 100 Life Points per hit. A simple speed-b
 
 When Life Points reach zero: lose one heart, end the current run, return Ollie to the beginning, and reset Life Points to 1,000. If no hearts remain, go to Game Over.
 
-When a heart is lost, establish a recovery target at **Life Points at loss + 5,000**. Reaching that target restores one heart, up to three. A later heart loss establishes a new target from the Life Points held at that moment.
+When a heart is lost, Ollie earns it back after recovering **5,000 Life Points** from that moment on, up to three hearts. A later heart loss restarts the count. (The original wording, "Life Points at loss + 5,000", could exceed the 10,000 cap after an eagle catch; the implemented rule counts recovered points instead — see `docs/c64-state-machine.md`.)
 
 ## 6. Hearts
 Ollie starts with 3 hearts.

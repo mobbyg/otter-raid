@@ -1,684 +1,195 @@
-# Otter Raid — State Machine Design
+# Otter Raid — State Machine
 
-## 1. Purpose
+One variable, `game_state`, selects the handler that `game_frame` runs
+each frame (`c64/game.asm`). `set_state` changes it and resets the
+per-state frame counter `state_t`. Hazards and the player never change
+`game_state`; they change Life Points or set `loss_cause`, and the end
+of `state_playing` decides.
 
-The rewrite uses explicit state machines to keep the game organized.
+## Main states
 
-A state is simply the mode something is currently in, and a transition is the event that moves it to another state.
+| `ST_` | Handler | File | What it does |
+|---|---|---|---|
+| `TITLE` (0) | `state_title` | screens.asm | title menu and its sub-screens (`ts_mode`): 0 menu, 1 high scores, 2 controls, 3 name entry |
+| `PLAYING` (1) | `state_playing` | game.asm | GET READY pause, then the river journey; also runs the attract demo |
+| `PAUSED` (2) | `state_paused` | game.asm | frozen; P resumes |
+| `LIFE_LOST` (3) | `state_life_lost` | game.asm | 150 frames: Ollie faints, or is already gone with the eagle |
+| `GAME_OVER` (4) | `state_game_over` | game.asm | "GAME OVER" for 200 frames |
+| `HOME` (5) | `state_home` | home.asm | the homecoming party and score tally |
+| `HIGH_SCORES` (6) | `state_high_scores` | screens.asm | vestigial: never entered; jumps to `title_menu` |
 
-For example, the main game can be in TITLE, MENU, or PLAYING. While it is PLAYING, the eagle can independently be in WAITING, ENTERING, SWOOPING, or EXITING.
+## Transitions
 
-This document defines the behavior before assembly code is written.
-
-## 2. Main Game State Machine
-
-The main game state controls the overall mode of Otter Raid.
-
-### States
-
-- TITLE — Display the title artwork and wait for player input.
-- MENU — Display the main menu and allow the player to choose an option.
-- PLAYING — Run the actual river journey.
-- LIFE_LOST — Brief transition after Ollie loses a heart; reset the run.
-- GAME_OVER — Display the game-over screen and wait for the next action.
-- HOME — Play the homecoming celebration.
-- HIGH_SCORES — Display scores and handle the transition back toward another game.
-
-### Main transitions
-
-| Current State | Event | Next State |
+| From | Event | To |
 |---|---|---|
-| TITLE | Player presses Start/Fire | MENU |
-| TITLE | Player presses another accepted input | MENU |
-| MENU | Start Game selected | PLAYING |
-| MENU | Controls selected | MENU / CONTROLS* |
-| MENU | High Scores selected | HIGH_SCORES |
-| PLAYING | Life Points reach zero and hearts remain | LIFE_LOST |
-| PLAYING | Eagle catches Ollie and hearts remain | LIFE_LOST |
-| PLAYING | Life Points reach zero with no hearts | GAME_OVER |
-| PLAYING | Eagle catches Ollie with no hearts | GAME_OVER |
-| PLAYING | Destination reached | HOME |
-| LIFE_LOST | Reset work complete | PLAYING |
-| GAME_OVER | Player chooses restart | PLAYING |
-| GAME_OVER | Player chooses menu | MENU |
-| HOME | Celebration complete | HIGH_SCORES |
-| HIGH_SCORES | Player chooses another game | PLAYING or MENU |
-| HIGH_SCORES | Player chooses to exit | MENU |
-
-* A separate CONTROLS state can be added if the menu needs to become more than a simple screen. The initial implementation does not need to overcomplicate this.
-
-### Important rule
-
-Only the main game state decides whether the game is actually running.
-
-For example, if the state is HOME, the river does not scroll, alligators do not move, the eagle does not attack, and collisions are not processed.
-
-This prevents one subsystem from accidentally continuing to run during another screen.
-
-## 3. PLAYING State
-
-PLAYING is the main active game state.
-
-Each game frame should perform the gameplay systems in a deliberate order:
-
-1. Read player input.
-2. Update Ollie's movement and swimming speed.
-3. Update dive state and dive timer.
-4. Update river position/scrolling.
-5. Update alligators.
-6. Update crawfish.
-7. Update eagle.
-8. Check collisions.
-9. Apply Life Point/heart effects.
-10. Update distance toward home.
-11. Update score.
-12. Update timers.
-13. Update sprites and HUD.
-14. Check for a state transition.
-
-The detailed frame contract is documented in **docs/c64-frame-update-flow.md**. The exact routine arrangement can change during implementation, but the logical order should remain deliberate.
-
-## 4. Life-Loss State
-
-LIFE_LOST is a short transition state rather than a second gameplay mode.
-
-When Ollie loses a heart:
-
-1. Stop normal gameplay updates.
-2. Decrement hearts.
-3. Determine whether any hearts remain.
-4. If none remain, transition to GAME_OVER.
-5. Otherwise reset the current run:
-   - Ollie's position returns near bottom-center.
-   - Life Points return to 1,000.
-   - Dive state is cleared.
-   - Temporary invulnerability is cleared.
-   - River position returns to its starting point.
-   - Active hazards are reset.
-   - A new river sequence may be selected.
-6. After reset work is complete, return to PLAYING.
-
-The score is not reset by losing a heart.
-
-The player's overall game attempt continues until all three hearts have been lost or the destination is reached.
-
-## 5. GAME_OVER State
-
-GAME_OVER is entered when Ollie has no hearts remaining.
-
-Gameplay is stopped.
-
-The game may display:
-
-- Game Over
-- Final score
-- Distance reached
-- Any other useful summary
-
-If the score qualifies for the high-score table, the high-score entry process occurs before returning to normal menu flow.
-
-Possible transitions:
-
-- Restart → PLAYING
-- Menu → MENU
-- High Scores → HIGH_SCORES
-
-The exact input/menu behavior can be tuned later.
-
-## 6. HOME State
-
-HOME is entered when Ollie reaches the destination.
-
-Gameplay stops immediately.
-
-The celebration sequence should be treated as its own small state machine so it can be animated without accidentally running normal river gameplay.
-
-Suggested sequence:
-
-1. HOME_SETUP — Stop river scrolling and place Ollie, Auntie, and present.
-2. HOME_ARRIVE — Ollie reaches Auntie/home position.
-3. HOME_PRESENT — Present is shown between them.
-4. HOME_CELEBRATE — Play a short animation.
-5. HOME_MESSAGE — Display the completion message.
-6. HOME_DONE — Wait briefly or for player input.
-
-After the celebration, transition to HIGH_SCORES.
-
-The celebration should take approximately 5–10 seconds, subject to playtesting.
-
-## 7. Title/Menu Flow
-
-The title and menu are intentionally separate.
-
-### TITLE
-
-Displays the title artwork.
-
-No gameplay systems run.
-
-Accepted input moves to MENU.
-
-### MENU
-
-The menu will contain at least:
-
-- Start Game
-- High Scores
-- Controls
-- Exit
-
-An About entry may be added later.
-
-A simple menu cursor/selection variable is sufficient.
-
-The menu should not create a new game until Start Game is selected.
-
-### Starting a new game
-
-Starting a completely new game initializes:
-
-- Hearts = 3
-- Life Points = 1,000
-- Score = 0
-- Distance = 0
-- Dive timer = 0
-- Temporary invulnerability = 0
-- Player position
-- River seed/state
-- Alligator objects
-- Crawfish objects
-- Eagle state
-
-This is different from LIFE_LOST, which preserves the player's accumulated score.
-
-## 8. Player State and Protection
-
-Ollie does **not** use mutually exclusive NORMAL/DIVING/INVULNERABLE states.
-
-Movement is always active while the main state is PLAYING. Protection is represented by independent flags/timers.
-
-The player may simultaneously have:
-- speed level 1, 2, or 3
-- diving active/inactive
-- crawfish invulnerability active/inactive
-
-The effective protection rule is:
-
-    protected = diving OR crawfish_invulnerable
-
-### Movement
-
-Three initial discrete swimming speeds are used:
-- Speed 1 — slow
-- Speed 2 — normal
-- Speed 3 — fast
-
-Holding Up/W requests a higher speed. Holding Down/S requests a lower speed.
-
-The actual distance contribution of each speed is a tuning value.
-
-### Diving
-
-Triggered by SPACE or the joystick dive control.
-
-- Alligator collision is ignored.
-- Eagle collision is ignored.
-- First 3 seconds are free.
-- Beyond 3 seconds, Life Points drain at approximately 50 points per second.
-
-Stopping the dive clears the diving flag.
-
-### Crawfish protection
-
-Collecting a crawfish starts a five-second invulnerability timer.
-
-- Alligator collision is ignored.
-- Eagle collision is ignored.
-
-If Ollie is both diving and crawfish-protected, either protection is sufficient to prevent damage. Protection lasts until both independent conditions have ended.
-
-## 9. Alligator State Machine
-
-Each alligator is an independent world object.
-
-Suggested states:
-
-- INACTIVE
-- ENTERING
-- CROSSING
-- EXITING
-- COOLDOWN
-
-### INACTIVE
-
-No active alligator exists in this object slot.
-
-The river/enemy manager may activate it when an appropriate spawn condition occurs.
-
-### ENTERING
-
-The alligator moves from its selected river bank toward the playable river area.
-
-Its initial side, speed, direction, and starting position are selected when it spawns.
-
-### CROSSING
-
-The alligator moves across the river.
-
-Its speed is allowed to vary between objects.
-
-It can collide with Ollie during this state.
-
-### EXITING
-
-The alligator has crossed far enough to leave the playable area.
-
-It continues moving until it is safely outside the active area.
-
-### COOLDOWN
-
-The object slot is temporarily unavailable for immediate reuse.
-
-After the cooldown it returns to INACTIVE.
-
-### Alligator design rule
-
-Alligators should not be implemented as a single fixed patrol pattern.
-
-Each active object should have its own:
-
-- X position
-- Y/world position
-- Direction
-- Speed
-- Side
-- State
-- Active flag/timer as needed
-
-This allows multiple alligators to behave differently.
-
-## 10. Eagle State Machine
-
-The eagle is a special timed hazard.
-
-Suggested states:
-
-- WAIT
-- SELECT_ATTACK
-- ENTER
-- SWOOP
-- EXIT
-- COOLDOWN
-
-### WAIT
-
-No eagle is currently attacking.
-
-The eagle timer counts toward the next attack.
-
-The target interval is randomized to approximately 90–120 seconds.
-
-### SELECT_ATTACK
-
-When the timer expires:
-
-1. Choose attack side.
-2. Select the corresponding entry position.
-3. Initialize the eagle's flight parameters.
-4. Transition to ENTER.
-
-### ENTER
-
-The eagle enters from the selected side.
-
-It should be visible before the main crossing begins.
-
-### SWOOP
-
-The eagle moves diagonally across the river.
-
-The intended path crosses from one side toward the opposite side, creating the visual impression of a V-shaped swoop.
-
-During this state:
-
-- If Ollie is protected by diving, no catch occurs.
-- If Ollie has crawfish invulnerability, no catch occurs.
-- Otherwise, an eagle collision can catch Ollie.
-
-### EXIT
-
-If the eagle misses Ollie, it continues off the opposite side of the river.
-
-It does not turn around to make a second attack during the same pass.
-
-### COOLDOWN
-
-The eagle disappears and the system returns to WAIT.
-
-A new 90–120 second interval is selected before the next attack.
-
-### Eagle catch
-
-If the eagle catches Ollie:
-
-1. Stop normal gameplay updates.
-2. Lose one heart.
-3. Reset the run through LIFE_LOST.
-4. If no hearts remain, transition to GAME_OVER instead.
-
-## 11. Crawfish State Machine
-
-Crawfish are simpler collectible objects.
-
-Suggested states:
-
-- INACTIVE
-- ACTIVE
-- COLLECTED
-
-### INACTIVE
-
-No crawfish is currently present.
-
-### ACTIVE
-
-A crawfish is visible and can be collected.
-
-### COLLECTED
-
-The player has touched the crawfish.
-
-On collection:
-
-- Remove/hide the crawfish.
-- Start the 5-second invulnerability timer.
-- Increase score according to the eventual scoring rules.
-
-Then the object returns to INACTIVE when its slot is reused.
-
-## 12. River State
-
-The river does not need to use a complicated state machine.
-
-Its primary runtime state is:
-
-- Current generated section
-- Scroll position
-- Left bank position
-- Right bank position
-- Section/segment index
-- Generation seed/state
-
-The river generator should produce smooth sections rather than changing the banks randomly every row.
-
-A new section can be generated as Ollie approaches it.
-
-### River reset
-
-When a run resets:
-
-- Return to the beginning of the river.
-- Reset the river generator.
-- Select a new seed if procedural variation is enabled.
-- Clear old scenery/object placement as necessary.
-
-This gives the player a new run without requiring the river to be identical every time.
-
-## 13. Collision Rules
-
-Collision processing should be centralized rather than scattered through every object routine.
-
-The collision system checks:
-
-### Ollie vs. alligator
-
-If Ollie is:
-
-- Diving → no damage
-- Crawfish-protected → no damage
-- Otherwise → remove 100 Life Points initially
-
-The exact speed-based modifier remains a tuning decision.
-
-### Ollie vs. eagle
-
-If Ollie is:
-
-- Diving → no catch
-- Crawfish-protected → no catch
-- Otherwise → lose one heart
-
-### Ollie vs. crawfish
-
-Collect crawfish and activate 5-second invulnerability.
-
-### Ollie vs. river bank
-
-Initially:
-
-- Constrain Ollie's movement.
-- Do not remove Life Points.
-- Do not remove a heart.
-
-## 14. Life Point and Heart Transitions
-
-Life Points are separate from the state machine itself, but reaching certain values causes state transitions.
-
-### Alligator hit
-
-Life Points = Life Points - damage
-
-If Life Points remain above zero:
-
-- Continue PLAYING.
-
-If Life Points reach zero:
-
-- Lose one heart.
-- Transition to LIFE_LOST.
-
-### Dive drain
-
-After the first 3 seconds of a continuous dive:
-
-- Drain approximately 50 Life Points per second.
-
-If this reaches zero:
-
-- Lose one heart.
-- Transition to LIFE_LOST.
-
-### Heart recovery
-
-When a heart is lost, establish:
-
-    recovery_target = Life Points at loss + 5,000
-
-Reaching that target restores one heart, up to three. A later heart loss establishes a new target from the Life Points held at that moment.
-
-## 15. Distance and Home Transition
-
-Distance is the measure of actual progress toward home.
-
-Each frame:
-
-- Swimming speed contributes to upstream distance.
-- Higher speed advances the journey faster.
-- Lower speed advances the journey more slowly.
-
-When:
-
-Distance >= Destination Distance
-
-the game transitions:
-
-PLAYING -> HOME
-
-The exact destination distance is intentionally a tuning value.
-
-This makes Up/Down meaningful to the actual objective rather than merely changing a cosmetic speed number.
-
-## 16. Frame-Level Transition Priority
-
-When multiple events happen during the same frame, the game needs predictable priority.
-
-Initial priority:
-
-1. Fatal state transition / no hearts
-2. Heart loss
-3. Home reached
-4. Other gameplay updates
-
-More specifically:
-
-- If an event causes the final heart to be lost, GAME_OVER wins.
-- A heart-loss event should stop normal gameplay for that frame.
-- HOME should only be entered while Ollie is still alive.
-- Collision effects should be resolved before deciding whether the run continues.
-
-This prevents contradictory results such as reaching home and losing the final heart on the same frame.
-
-## 17. State Machine Implementation Model
-
-The assembly implementation should have one main game-state variable.
-
-Conceptually:
-
-    game_state = TITLE
-
-The main loop then dispatches to the routine belonging to that state.
-
-Conceptually:
-
-    TITLE       -> title_update
-    MENU        -> menu_update
-    PLAYING     -> play_update
-    LIFE_LOST   -> life_lost_update
-    GAME_OVER   -> game_over_update
-    HOME        -> home_update
-    HIGH_SCORES -> high_scores_update
-
-These are conceptual names, not final labels.
-
-The important part is that one place controls the main state.
-
-Subsystem state variables are separate.
-
-For example:
-
-    game_state = PLAYING
-    eagle_state = SWOOP
-    player_state = DIVING
-
-That means:
-
-The game is playing, the eagle is currently swooping, and Ollie is underwater.
-
-This is much easier to reason about than having unrelated routines decide independently whether the game should still be running.
-
-## 18. Implementation Order
-
-The rewrite should be implemented in this order:
-
-### Phase 1 — Main state machine
-
-Implement:
-
-- TITLE
-- MENU
-- PLAYING
-- LIFE_LOST
-- GAME_OVER
-- HOME
-- HIGH_SCORES
-
-Use placeholder screens where necessary.
-
-### Phase 2 — Player state
-
-Implement:
-
-- Normal movement
-- Speed
-- Dive
-- Dive timer
-- Player reset
-
-### Phase 3 — River
-
-Implement:
-
-- Scroll
-- Smooth bank positions
-- Player boundaries
-- River reset
-
-### Phase 4 — Resources
-
-Implement:
-
-- Life Points
-- Hearts
-- Life recovery
-- Reset behavior
-
-### Phase 5 — Hazards
-
-Implement:
-
-- Alligators
-- Crawfish
-- Eagle
-- Their individual state machines
-
-### Phase 6 — Collision
-
-Centralize collision and damage rules.
-
-### Phase 7 — Journey
-
-Implement:
-
-- Distance
-- Destination
-- Home celebration
-
-### Phase 8 — Presentation
-
-Add:
-
-- Title artwork
-- Menu artwork
-- HUD polish
-- Animations
-- Sound
-- High-score presentation
-
-## 19. Design Principle
-
-The state machine is not intended to make the game complicated.
-
-It does the opposite.
-
-At any moment we should be able to answer:
-
-1. What is the game doing?
-2. What is Ollie doing?
-3. What is each hazard doing?
-4. What event can change each state?
-
-If those answers are explicit, the assembly code becomes much easier to build, debug, and change.
-
-The state machine is therefore part of the game's architecture, not just an implementation detail.
-
-## 20. Pause
-
-PAUSED is a top-level state paired with PLAYING:
-
-    PLAYING <-> PAUSED
-
-The initial pause key is **P** rather than RUN/STOP.
-
-While paused, gameplay movement, scrolling, hazards, collisions, Life Points, distance, score, and gameplay timers freeze. Music may continue playing.
-
-The PAUSED presentation can use custom characters rather than consuming a hardware sprite.
+| boot | `title_enter` | TITLE, menu |
+| TITLE menu | UP/DOWN move the cursor | TITLE menu |
+| TITLE menu | FIRE/RETURN on START GAME | `game_start` -> PLAYING |
+| TITLE menu | FIRE/RETURN on HIGH SCORES or CONTROLS | that sub-screen |
+| TITLE menu | idle for 768 frames | high scores, marked as the idle tour (`idle_seq`) |
+| scores / controls | FIRE/RETURN, or 250 frames | menu, or the attract demo if this is the idle tour |
+| name entry | third letter confirmed | `title_enter` |
+| PLAYING | P | PAUSED (`sound_pause` 1) |
+| PAUSED | P | PLAYING (`sound_pause` 0, HUD redrawn) |
+| PLAYING | LP = 0 (`LOSS_LP`) or eagle carry finished (`LOSS_EAGLE`) | `lose_heart`: hearts - 1 -> LIFE_LOST |
+| PLAYING | `river_end` and `top_world - home_row >= 18` | HOME |
+| PLAYING, demo | FIRE/RETURN, ~60 s, or any heart loss | `title_enter` |
+| LIFE_LOST | 150 frames, hearts > 0 | `run_seed`+1, `game_new_run` -> PLAYING |
+| LIFE_LOST | 150 frames, hearts = 0 | GAME_OVER |
+| GAME_OVER | 200 frames | `hiscore_check` -> TITLE (name entry if the score places, else menu) |
+| HOME | after the show (see below) | `hiscore_check` -> TITLE |
+
+Losing the last heart still goes through LIFE_LOST (3 s) before
+GAME_OVER. Within one PLAYING frame the checks run in this order:
+pause, then loss, then home. A loss therefore always beats arriving
+home.
+
+## Starting a game and a run
+
+| Routine | Does |
+|---|---|
+| `game_start` | score = 0, hearts = 3, `run_seed` = 0, then `game_new_run` |
+| `game_new_run` | blank the display, `river_init`, `display_init`, `player_reset`, `gators_reset`, `eagle_reset`; LP = 1,000; heart progress, `safe_rows` and `loss_cause` = 0; sprite shadow reset; HUD drawn; GET READY for 90 frames; river music; PLAYING |
+
+Every lost heart restarts the journey from world row 0, with a
+different river (`run_seed`+1). Score and hearts carry over.
+
+**GET READY** (`ready_t`): for 90 frames the message blinks, the
+river, hazards and input are frozen, and only the water animation and
+Ollie's sprite run.
+
+## Rules
+
+### Life Points
+
+| Rule | Value |
+|---|---|
+| Start, and after every heart loss | 1,000 (`LP_START`) |
+| Maximum | 10,000 (`LP_MAX`) |
+| Gator bite | -100 (`GATOR_DAMAGE`), then 75 frames of hurt grace |
+| Diving | free for 150 frames (3 s) from the start of the dive, including going down and coming up; then -1 LP per frame (50 LP/s on PAL) until fully surfaced |
+| Recovery | +5 LP per scrolled row (`LP_PER_ROW`), once 16 rows have passed since the last gator bite (`SAFE_ROWS_NEEDED`) |
+| LP reaches 0 | heart lost (`LOSS_LP`) |
+
+### Hearts
+
+| Rule | Value |
+|---|---|
+| Start | 3 |
+| Lost when | LP reaches 0, or the eagle carries Ollie away |
+| Earned back | **5,000 LP earned since the last heart loss** (`HEART_COST`), at most 3 hearts |
+
+Heart progress (`heart_prog`) adds every recovery amount passed to
+`lp_add`. It counts LP *earned*, not net LP, so it keeps counting even
+while LP sits at the 10,000 cap. Any excess over 5,000 carries over to
+the next heart. Progress is zeroed at every heart loss (and new run)
+and while all three hearts are full.
+
+**Resolved contradiction.** The original docs gave both "recovery
+target = LP at loss + 5,000" and "5,000 newly accumulated LP". LP is
+reset to 1,000 after a loss (and is 0 after an LP loss), so a target
+based on LP at the moment of loss is meaningless. The implemented rule
+is the second one: 5,000 LP earned since the last loss.
+`docs/otter-raid-game-design.md` still states the old rule.
+
+### Protection
+
+`player_protected` is true while any of these hold:
+
+| Source | Window |
+|---|---|
+| Dive | DOWN from frame 6 of 12, all of UNDER, UP until frame 6 of 12 |
+| Crawfish | 250 frames (5 s on PAL); refreshed by each pickup |
+
+Protection blocks both gator bites and the eagle's catch. Separately,
+the 75-frame **hurt grace** after a bite blocks further gator bites
+(but not the eagle) and makes Ollie blink.
+
+### Scoring
+
+| Event | Points |
+|---|---:|
+| Each scrolled row | 10 |
+| Crawfish | 500 |
+| Fish (also +250 Life Points) | 100 |
+| Gift for Auntie | 1,000 |
+| Home tally: each gift collected | 500 |
+| Eagle swoop that ends without a catch | 1,000 |
+| Home tally: Life Points | 100 per 100 LP (any remainder below 100 is dropped) |
+| Home tally: each heart left | 5,000 |
+
+Score is 6-digit BCD. `hi_score` (shown in the HUD) starts as the best
+entry of the high-score table and is updated by `hiscore_check`.
+
+## Sub-state machines
+
+| Owner | States | Notes |
+|---|---|---|
+| Ollie's dive (`ply_dive`) | NONE -> DOWN (12 frames) -> UNDER (while FIRE is held) -> UP (12 frames) -> NONE | the free-dive counter resets when he is fully up |
+| Gator (`g_state`) | OFF -> LURK (40) -> SWIM <-> BITE (24) -> SINK (30) -> OFF | any state -> OFF when it drifts below line 248 |
+| Eagle (`e_state`) | WAIT -> WARN (60) -> SWOOP (128) -> WAIT, or SWOOP -> CARRY (70) -> `LOSS_EAGLE` | timer counts only in PLAYING, and not once `river_end` is set |
+| Title (`ts_mode`) | menu / scores / controls / name entry | all inside `ST_TITLE` |
+
+Details: `docs/c64-object-and-collision-system.md`.
+
+## HOME sequence
+
+`state_t` wraps every 256 frames, so `home_t_hi` extends it.
+
+| Frame | Phase |
+|---|---|
+| 1 | `home_begin`: scroll stops, gators and eagle cleared, the party spot is found from the dock, "HAPPY BIRTHDAY, AUNTIE!" appears in HUD row 1 |
+| 1-109 | Ollie swims to the spot (input ignored) |
+| 110+ | party: Ollie and Auntie dance, the present hops, balloons rise, fireworks burst |
+| 170+ | tally: 100 LP -> 100 points per frame, then 5,000 per heart (hearts count down to 0) |
+| 320+ | FIRE/RETURN leaves (intended: `HOME_LEAVE_MIN`) |
+| 512 | leaves automatically (`home_t_hi >= 2`) |
+
+Known issue: the early-leave test compares only the low byte of
+`HOME_LEAVE_MIN`, so FIRE is accepted from frame 110 and can skip the
+tally.
+
+## High scores
+
+There are five entries of 3 BCD bytes and 3 letters in `hs_table`
+(RAM, kept until power-off, not saved to disk).
+
+1. `hiscore_check` inserts the score above the first entry it beats
+   or equals, shifting the lower entries down.
+2. It then shows the table with "ENTER YOUR NAME!" in `ts_mode` 3.
+3. UP/DOWN cycle a letter A-Z, FIRE/RETURN moves on, and after three
+   letters the game returns to the menu. There is no timeout.
+
+## Attract demo
+
+From the idle tour (menu, then high scores, then the demo),
+`demo_start` sets `demo_mode` and calls `game_start`.
+
+- `demo_ai` replaces the input each frame:
+  - steer to the middle of the wider channel;
+  - dive when a swimming gator is close above Ollie, or during the
+    eagle's dive;
+  - swim fast in alternating 128-frame stretches.
+- The eagle comes after about 900 frames.
+- The demo ends on FIRE/RETURN, after 12 wraps of `state_t` (~61 s),
+  or at the first heart loss. Each of these returns to the title.
+
+## Changed from the original design
+
+- **Menus.** TITLE and MENU are one state, and there is no Exit item.
+  HIGH_SCORES became a title sub-screen; the `ST_HIGH_SCORES` id is
+  kept only in the dispatch table.
+- **GAME_OVER is timed** (4 s) instead of offering restart or menu
+  choices. High-score entry follows if the score places.
+- **The eagle** uses WAIT/WARN/SWOOP/CARRY instead of
+  ENTER/SWOOP/EXIT/COOLDOWN. Its catch costs the heart after a 70-frame
+  carry.
+- **Gators** use LURK/SWIM/BITE/SINK instead of
+  ENTERING/CROSSING/EXITING/COOLDOWN.
+- **Crawfish have no state machine**; they are playfield characters.
+- **Distance** is the number of scrolled rows (`top_world`). Home is
+  reached when the home row reaches Ollie's line.
+- **The heart recovery rule** is "5,000 LP earned since the last
+  loss" (see above).
+- **PAUSED stops the music too.**
+- **New: the attract demo and the GET READY pause.**

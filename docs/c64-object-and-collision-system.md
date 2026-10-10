@@ -1,231 +1,215 @@
-# Otter Raid — C64 Object and Collision System
+# Otter Raid — C64 Objects and Collision
 
-## Purpose
+There is no generic object system. Each hazard module owns its state,
+moves itself and tests itself against Ollie. Every outcome goes through
+a few shared channels:
 
-Gameplay objects in Otter Raid use fixed-size pools and centralized collision handling. The C64 should never need dynamic memory allocation during play.
+- `lp_sub` (Life Points);
+- `ply_hurt` (grace after a bite);
+- `ply_invuln` (crawfish protection);
+- `loss_cause` (heart lost).
 
-## Object Pools
+`state_playing` turns these into state transitions once per frame
+(`docs/c64-state-machine.md`). Code: `player.asm`, `enemies.asm`,
+`eagle.asm`, `game.asm` (`player_pickup`) and `river_engine.asm`
+(`river_limits`).
 
-Initial active-object targets:
+## Hardware sprites
 
-| Object | Maximum active |
-|---|---:|
-| Ollie | 1 |
-| Alligators | 4 |
-| Crawfish | 2 |
-| Eagle | 1 |
+Lower numbers are drawn on top. `$D01B` = 0, so every sprite is in
+front of the playfield. The shared multicolors are `$D025` black and
+`$D026` white.
 
-The four-alligator target is intentional. If performance testing shows that fewer are needed, the active count can be reduced without changing the object model.
+| # | PLAYING | Mode, color | HOME scene | Title |
+|---|---|---|---|---|
+| 0 | eagle (X+Y expanded) | MC, brown | firework (hires) | Ollie portrait, top left |
+| 1 | effect: splash / bubbles / sparkle | MC white / hires light blue / hires yellow | firework (hires) | portrait, top right |
+| 2 | Ollie | MC, brown (dark grey underwater, color cycle while invulnerable) | Ollie dancing | portrait, bottom left |
+| 3-6 | gators 0-3 | MC, green | 3 present, 4 Auntie, 5-6 balloons | 3: portrait, bottom right; 4: present |
+| 7 | eagle shadow (X+Y expanded) | hires, dark grey | firework (hires) | — |
 
-## Fixed Slots
+All sprite writes go to the shadow at `$0240`; the vblank IRQ latches
+it (`docs/c64-frame-update-flow.md`). Sprite graphics and pointer ids:
+`docs/c64-graphics.md`.
 
-Each object pool uses a fixed number of slots.
+## Coordinates
 
-A slot contains only the state needed to update and collide the object, such as:
-- active flag
-- X position
-- world Y position
-- movement speed
-- direction
-- state
-- animation frame
-- timers as required
+| Object | X | Y |
+|---|---|---|
+| Ollie | `ply_x`: sprite left edge in MC pixels; sprite X = 24 + 2·`ply_x` | `ply_y` = sprite Y register |
+| Gator | `g_x` = MC pixels + 16 (`GX_OFS`), so a gator can poke past the left edge; sprite X = 2·`g_x` - 8 | `g_y` = sprite Y register |
+| Eagle | 24-bit hires sprite X (8-bit fraction) | 8.8 sprite Y |
 
-Exact byte layouts will be finalized when the assembly routines are written.
+## Hitboxes
 
-Unused slots remain inactive.
+| Object | X (from sprite left) | Y (lines from sprite top) |
+|---|---|---|
+| Ollie | MC px 3..8 (6 MC = 12 hires px) | 3..17 (15 lines) |
+| Gator | MC px 1..10 (10 MC px) | 6..15 (10 lines) |
+| Eagle | no box: a talon point at sprite +24 hires px, +34 lines | |
 
-## Alligators
+The eagle catch test compares the talon point with Ollie's center
+(sprite +12 hires px, +10 lines) and needs `|dx| < 14` hires px **and**
+`|dy| < 14` lines.
 
-Four alligator slots are available to the gameplay engine.
+## Ollie
 
-Each alligator independently stores:
-- active/inactive
-- river side
-- X position
-- world Y position
-- direction
-- speed
-- movement state
-- animation frame
-- hit/cooldown information as required
+| Aspect | Rule |
+|---|---|
+| Speed | UP = fast, DOWN = slow, else normal. Sets `scroll_speed` and eases the sprite Y toward 186/198/208 at 1 line/frame. |
+| Steering | accel 10/64 MC px per frame², friction 6/64, max 96/64 (1.5 MC px per frame) |
+| Banks | `river_limits` over the hitbox lines. The hitbox is clamped into `[lim_l, lim_r)` and pushed off an island toward the nearer side. Contact sets `vx` = 0 and plays a bump sound (12-frame cooldown). No damage. |
+| Dive | FIRE: DOWN 12 frames, UNDER while held, UP 12 frames. Protected from frame 6 of DOWN to frame 6 of UP. |
 
-Alligators do **not** collide with one another.
+## Effect sprite (#1)
 
-Two alligators can therefore be:
-- at different world depths
-- on opposite sides
-- moving toward one another
-- visually facing each other
+| Shown when | Frames | Mode, color |
+|---|---|---|
+| Diving or surfacing | splash, 3 frames over 12 | MC, white |
+| Underwater (UNDER) | bubbles, 2 frames | hires, light blue |
+| Invulnerable | sparkle, 4 frames | hires, yellow |
 
-without interacting.
+The sprite sits at Ollie's position. In the last 50 frames of crawfish
+protection a warning sound plays every 16 frames.
 
-### Sprite orientation
+## Gators
 
-The C64 VIC-II supports horizontal and vertical sprite expansion/flip controls through its sprite registers.
+The pool holds `GATOR_MAX` = 4 gators as parallel arrays at `$0300`.
 
-For the initial implementation, we should use **one gator sprite graphic and horizontal-flip it** when the same artwork can serve both directions.
+| State | Time | Behaviour |
+|---|---|---|
+| OFF | | slot free |
+| LURK | 40 frames | eyes only at the bank, drifting, harmless |
+| SWIM | until a shore | moves across at `g_speed`; the only state that bites |
+| BITE | 24 frames | jaws open, holds position, then back to SWIM |
+| SINK | 30 frames | eyes only, harmless, then OFF |
 
-This avoids wasting sprite memory on duplicate left/right artwork.
+**Spawning** (`gator_spawn`):
 
-If a particular animation looks better with dedicated frames, separate frames can still be added later.
+- `gator_spawn_t` counts down. The first try comes 100 frames into a
+  run. Each try then sets the next interval to
+  `max(12, 40 - section) + rand(0..63)` frames.
+- There are no spawns while `top_world < 40` or once `river_end` is
+  set, and none without a free slot.
+- Height: sprite Y 92..147, at least 24 lines away from every other
+  active gator. Otherwise the try is skipped.
+- Side: random. The gator starts at that bank, using `river_limits`
+  at its height, with its head 4 pixels out of the bank, facing across
+  the river. A splash sound plays.
+- Speed: `6 + section/4 + rand(0..7)` sixteenths of an MC pixel per
+  frame. That is 0.4-0.8 px/frame early and up to about 1.4 late.
 
-## Crawfish
+**Riding the current.** Every active gator adds `scroll_delta` to its
+Y each frame, so it drifts with the river at any swim speed. It
+despawns once its Y reaches 248.
 
-Crawfish use a small fixed pool.
+**Shore check** (each SWIM frame, `river_limits` over its hitbox
+lines). The gator sinks when its nose reaches the far bank. It also
+sinks when its nose reaches the near shore of an island, unless it was
+already past that shore (for example, when it spawned in the far
+channel).
 
-Each active crawfish stores:
-- position
-- world Y
-- active state
-- animation frame
-- collection state as needed
+**Bite.** In SWIM, if the hitboxes overlap and Ollie is neither
+protected nor in hurt grace, the gator switches to BITE and
+`player_hit_gator` runs:
 
-Crawfish are generated as part of river sections.
+- -100 LP;
+- `ply_hurt` = 75 frames (Ollie blinks);
+- `safe_rows` = 0;
+- chomp sound.
 
-A placement can be difficult or risky to reach. The generator does not need to guarantee that every crawfish is safely collectible.
+A protected Ollie overlaps a gator without any effect. Gators never
+collide with each other.
+
+**Frames.** Separate right- and left-facing frames: a 3-frame swim
+cycle (0,1,2,1, 8 frames each) plus bite and lurk frames.
 
 ## Eagle
 
-The eagle is a single special object.
+| State | Behaviour |
+|---|---|
+| WAIT | Timer `4500 + rand(0..255)·6` frames (90-120 s on PAL). Counts only during PLAYING frames, and not once `river_end` is set. Reset every run. |
+| WARN | 60 frames. Picks a side (`e_side`), plays the screech and the eagle tune. The shadow slides in over the water from that side, 70 lines above Ollie, at 2 px/frame. |
+| SWOOP | 128 frames, see below. |
+| CARRY | 70 frames climbing (at least 2 lines/frame) with Ollie's "caught" frame hanging under the talons, then `loss_cause = LOSS_EAGLE`. |
 
-It stores:
-- active state
-- attack state
-- side
-- X/Y position
-- trajectory progress
-- animation frame
-- attack timer
-- collision status
+**SWOOP.**
 
-Its attack interval is approximately 90–120 seconds.
+- **Launch.** The eagle starts at the top corner of the warned side
+  (hires X 0 or 344, Y 22, above the playfield). It aims so that the
+  talons reach Ollie's center **where he was at launch**, 64 frames
+  later. The step is (target - start)/64 in 8.8 fixed point.
+- **Path.** Y adds the step for 64 frames and subtracts it for the
+  next 64, while X keeps going. The result is a V that leaves on the
+  far side; the eagle never turns back.
+- **Catch window.** Frames 54-73. A talon hit on an unprotected Ollie
+  starts CARRY.
+- **Miss.** If no catch happens, +1,000 points, a new timer and the
+  river tune again.
+- **Look.** The dive frame shows near the bottom of the V (frames
+  48-71); otherwise there is a 4-frame flap.
+- **Shadow.** It is offset by `h = |64 - t|`: Y + h + 8 and X + h/2,
+  so it meets the eagle at the bottom of the V.
 
-The eagle enters from one side, crosses diagonally, and exits the opposite side. It does not reverse direction during an attack.
+## Pickups (characters): crawfish, fish, gifts
 
-## Player Hitbox
+All pickups are two-character pairs in the playfield (see
+`river-engine.md`). `player_pickup` tests characters, not sprites:
 
-The visible Ollie sprite is not the collision box.
+- **Column:** `(ply_x + 6) >> 2`, Ollie's center column.
+- **Row:** from Ollie's head line `ply_y + 4`:
+  `row = ((line - 71 - fine_pos) >> 3) + 2`. Rows `r` and `r+1` of the
+  buffer about to be shown (`front_buf`) are checked.
+- **Classify** (`pickup_class`): `CH_CRAWFISH_L/R` ($50/$51) is a
+  crawfish; `$58-$5F` are fish (`CH_FISH_L/R`) and gifts
+  (`CH_GIFT_FIRST` + 2 x kind). In `$58-$5F` pairs start on even codes,
+  so bit 0 tells the right half.
+- **Hit** on either half: the pair becomes water in that buffer, and
+  also at row `r+1` of the back buffer, which may already hold the
+  shifted copy. `pickup_erase` checks the cell holds the same left
+  character first, so a stale back buffer is left alone.
+- **Rewards:**
 
-The collision box should be a smaller rectangle inside the sprite.
+  | Pickup | Effect | Points | Sound |
+  |---|---|---:|---|
+  | Crawfish | `ply_invuln` = 250 frames (255 on NTSC) | 500 | `SFX_CRAWFISH_PICKUP` |
+  | Fish | +250 Life Points (counts toward a lost heart) | 100 | `SFX_FISH_EAT` |
+  | Gift (lily blossom, cake, wrapped box) | `gifts` + 1, shown in the HUD; +500 each again at the homecoming | 1,000 | `SFX_GIFT` |
 
-This is based on the first playtest, where smaller hitboxes produced more forgiving and natural-feeling collisions.
+- **Pop ring.** `pop_update` then draws a 3-stage ring (`CH_POP0..2`,
+  6 frames each) where the pickup was, in both buffers. It tracks the
+  pair's world row (`pop_world`), so it scrolls with the river, and
+  leaves water behind.
+- Pickups also work underwater.
 
-The exact width/height will be tuned visually.
+## Banks and islands
 
-## Enemy Hitboxes
+Walls are never characters. Ollie, gator spawns and gator shore checks
+all call `river_limits`, which reads the boundary samples of the rows
+under a range of raster lines. It returns the narrowest banks and the
+widest island span (only islands at least 8 pixels wide count). Bank
+contact never costs Life Points.
 
-Alligators and the eagle should likewise have logical collision regions smaller than or more precise than their full sprite rectangles where useful.
+## Changed from the original design
 
-This prevents transparent or decorative portions of a sprite from creating unfair hits.
+- **No central collision pass and no pickup pool.** Crawfish, fish and
+  gifts are characters collected by a screen test.
+- **Fish and gifts are new.** The original design only had crawfish.
+- **Separate left/right gator frames.** The VIC-II cannot flip
+  sprites horizontally, so the planned flip is impossible.
+- **Hit cooldown.** The BITE state plus the 75-frame hurt grace
+  replace the planned "contact cooldown".
+- **Eagle path.** The eagle aims at Ollie's position at launch from a
+  top corner and swoops in a V. Its side is announced by the shadow
+  during WARN. There are no separate ENTER/EXIT states; it still never
+  turns back.
+- **Water scenery is decoration.** Rocks, logs and lily pads do not
+  collide.
 
-## Collision Checks
+## Fixed after code review
 
-Collision handling is centralized.
-
-The collision routine tests relevant object pairs rather than allowing each object to modify Life Points independently.
-
-Initial pairs:
-- Ollie/alligator
-- Ollie/eagle
-- Ollie/crawfish
-- Ollie/bank
-
-No alligator/alligator collision is performed.
-
-## Protection
-
-Ollie has two independent forms of protection:
-
-### Diving
-
-While diving:
-- alligator damage is ignored
-- eagle catch is ignored
-
-The first three seconds are free. Longer continuous dives drain 50 Life Points per second.
-
-### Crawfish protection
-
-Collecting a crawfish:
-- starts a five-second timer
-- prevents alligator damage
-- prevents eagle catch
-
-The protection condition is:
-
-```text
-protected = diving OR crawfish_invulnerable
-```
-
-If both are active, either one is sufficient to prevent a collision effect.
-
-## Alligator Damage
-
-Base damage is exactly **100 Life Points**.
-
-A later test branch may experiment with a speed-based modifier, but the engine's base collision contract remains 100 points.
-
-A single physical contact should not repeatedly subtract Life Points every frame.
-
-The collision system therefore needs a short contact cooldown or equivalent separation rule.
-
-The exact duration is a tuning value.
-
-## Eagle Collision
-
-An unprotected Ollie hit by the eagle:
-- loses one heart
-- exits PLAYING
-- enters LIFE_LOST or GAME_OVER depending on remaining hearts
-
-A protected Ollie passes safely through the eagle's attack.
-
-## Crawfish Collection
-
-An Ollie/crawfish collision:
-- marks the crawfish collected
-- removes/hides it
-- starts five-second protection
-- awards the eventual crawfish score
-
-## Bank Collision
-
-Bank collision initially:
-- constrains Ollie's X position
-- does not cause Life Point damage
-- does not cost a heart
-
-## Collision Resolution Order
-
-The frame should resolve collisions before deciding whether PLAYING continues.
-
-Initial priority:
-
-1. Detect all relevant collisions.
-2. Apply crawfish collection/protection.
-3. Apply alligator damage.
-4. Apply eagle catch.
-5. Apply Life Point/heart transitions.
-6. Decide GAME_OVER, LIFE_LOST, HOME, or remain PLAYING.
-
-If an unprotected eagle catch and a gator hit happen in the same frame, the final-heart rule still applies normally; collision effects are resolved through one centralized transition path rather than letting two routines independently change game state.
-
-## Object/Renderer Separation
-
-Object updates own world state.
-
-The renderer converts world state into:
-- sprite positions
-- sprite animation selection
-- playfield markers
-
-The renderer must not decide whether an object hit Ollie or whether Life Points change.
-
-## Performance Goal
-
-The initial target is four active alligators, two crawfish, one eagle, and Ollie.
-
-That is a deliberately small fixed workload for the 6502.
-
-If the finished engine has enough CPU time, the pools can be expanded later without redesigning the architecture.
+- During the eagle's CARRY, `player_update`, `player_pickup` and gator
+  bites are skipped, so the carried-off Ollie cannot be bitten or
+  collect anything.
+- The surfacing frame is `2 - t/4` (was `1 - t/4`, which read past
+  `ollie_dive_frames`).
