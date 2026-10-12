@@ -127,9 +127,10 @@ gs_slot:
 	; side
 	jsr rng_next
 	and #1
+	bne gs_right_bank
+	; Left bank: A=0, so store direction after loading the slot.
 	ldx gs_slot_x
 	sta g_dir,x
-	bne gs_right_bank
 	; left bank, swimming right: head just out of the bank
 	lda lim_l
 	clc
@@ -137,6 +138,9 @@ gs_slot:
 	sta g_x,x
 	jmp gs_speed
 gs_right_bank:
+	; Right bank: A=1 from the random choice; preserve it for direction.
+	ldx gs_slot_x
+	sta g_dir,x
 	lda lim_r
 	clc
 	adc #GX_OFS-G_HB_L-4
